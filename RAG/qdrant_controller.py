@@ -52,7 +52,7 @@ except ImportError:
     print("Warning: qdrant-client not installed. Install with: pip install qdrant-client")
 
 
-from RAG.embedding import (
+from agentic_ai_platform.rag.embedding import (
     EmbeddingModel,
     EMBEDDING_DIMENSIONS,
     Embeddings,
