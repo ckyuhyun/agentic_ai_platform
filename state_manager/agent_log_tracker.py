@@ -9,10 +9,10 @@ class AgentLogTrace(BaseModel):
     timestamp: datetime
     state_revision: int
     
-    thought: str                
-    action_tool: str            
+    current_thought: str                
+    last_tool_called: str            
     action_input: Dict[str, Any] 
-    observation: Any           
+    last_observation: Any           
     
     latency_ms: float          
 
@@ -33,10 +33,10 @@ class AgentLogTracker:
             parent_id=parent_id,
             timestamp=datetime.now(),
             state_revision=self.current_revision,
-            thought=thought,
-            action_tool=action_tool,
+            current_thought=thought,
+            last_tool_called=action_tool,
             action_input=action_input,
-            observation=None,
+            last_observation=None,
             latency_ms=0.0
         )
         self.traces[trace_id] = trace
@@ -48,7 +48,7 @@ class AgentLogTracker:
                   latency_ms: float):
         if trace_id in self.traces:
             trace = self.traces[trace_id]
-            trace.observation = observation
+            trace.last_observation = observation
             trace.latency_ms = latency_ms
         else:
             raise ValueError(f"Trace ID {trace_id} not found")

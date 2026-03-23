@@ -1,5 +1,6 @@
 from agentic_ai_platform.graph.graph_build import GraphBuild
 from agentic_ai_platform.rag.embedding import Embeddings
+from agentic_ai_platform.model.llm import llm
 from pydantic import BaseModel
 
 from langgraph.graph import StateGraph, START, END
@@ -12,15 +13,17 @@ class States(BaseModel):
 def embedding(state: States) -> str:
     # In a real implementation, this would call an embedding model
     emd_model= Embeddings()
-    query = state['query'] 
+    query = state.query
+    llm_instance = llm("llama3")
+    llm_instance.chat(query)
     result = emd_model.generate_embedding(query)
-    return f"embedding_of({state['query']})"
+
+    return f"embedding_of({state.query})"
+
 
 
 def test_basic_graph():
     graph_build = GraphBuild()
-
-    # Define a simple graph with 3 nodes: A -> B -> C
     
     graph = StateGraph(States)
     

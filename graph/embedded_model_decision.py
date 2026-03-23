@@ -1,5 +1,5 @@
 import os
-
+from dotenv import load_dotenv
 from agentic_ai_platform.rag.embedding import EmbeddingModel
 
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -28,12 +28,14 @@ except ImportError:
     LLAMA_INDEX_AVAILABLE = False
 
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
 
 class EmbeddedModelDecision:
     def __init__(self,
                  text: str):
+        load_dotenv()
+
         self.embeddings = None
         self.text = text
         self.model = None
