@@ -67,7 +67,7 @@ class Embeddings:
         self.embeddings = emd.get_auto_decided_embedding_model()
         self._embedding_method = emd.get_embedding_method()
         self.chunker = None
-        
+
         self._set_chunker_()
         
 

@@ -1,8 +1,10 @@
 from agentic_ai_platform.graph.graph_build import GraphBuild
 from agentic_ai_platform.rag.embedding import Embeddings
-from typing import TypedDict, Any
+from pydantic import BaseModel
 
-class States(TypedDict):
+from langgraph.graph import StateGraph, START, END
+
+class States(BaseModel):
     query : str
     
 
@@ -19,7 +21,7 @@ def test_basic_graph():
     graph_build = GraphBuild()
 
     # Define a simple graph with 3 nodes: A -> B -> C
-    from langgraph.graph import StateGraph, START, END
+    
     graph = StateGraph(States)
     
     graph.add_node("embedding", embedding)

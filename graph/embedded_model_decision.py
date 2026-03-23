@@ -57,7 +57,7 @@ class EmbeddedModelDecision:
                 model=method,
                 base_url=OLLAMA_BASE_URL
             )
-           self._embedding_method
+           self._embedding_method= method
 
 
     def _init_embedding_model(self, model_name: EmbeddingModel):
