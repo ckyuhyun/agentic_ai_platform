@@ -1,39 +1,55 @@
-from agentic_ai_platform.graph.graph_build import GraphBuild
-from agentic_ai_platform.rag.embedding import Embeddings
-from agentic_ai_platform.model.llm import llm
+from typing import Annotated
+
 from pydantic import BaseModel
 
-from langgraph.graph import StateGraph, START, END
+from agentic_ai_platform.graph.graph_build import GraphBuild
+from agentic_ai_platform.model.llm import llm
+
+from langchain_core.messages import AnyMessage, HumanMessage
+from langchain_core.tools import tool
+from langgraph.graph import StateGraph, START
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
+
 
 class States(BaseModel):
-    query : str
-    
+    messages: Annotated[list[AnyMessage], add_messages] = []
 
 
-def embedding(state: States) -> str:
-    # In a real implementation, this would call an embedding model
-    emd_model= Embeddings()
-    query = state.query
-    llm_instance = llm("llama3")
-    llm_instance.chat(query)
-    result = emd_model.generate_embedding(query)
+@tool("search_final_news")
+def search_final_news(ticket: str, days_back: int) -> str:
+    """Search news for a specific stock during a time period and return the most relevant articles."""
+    return f"Search results for: {ticket} in the past {days_back} days"
 
-    return f"embedding_of({state.query})"
 
+tools = [search_final_news]
+
+llm_instance = llm("llama3.1")
+llm_instance.bind_tools(tools)
+
+
+def call_llm(state: States) -> dict:
+    """Invoke the LLM and append its response (with any tool_calls) to messages."""    
+    response = llm_instance.llm_instance.invoke(state.messages)
+    return {"messages": [response]}
 
 
 def test_basic_graph():
     graph_build = GraphBuild()
-    
+
     graph = StateGraph(States)
+
+    graph.add_node("call_llm", call_llm)
+    graph.add_node("tools", ToolNode(tools))
+
     
-    graph.add_node("embedding", embedding)
+    graph.set_entry_point("call_llm")
+    # Route to tools if LLM returned tool_calls, otherwise END
+    graph.add_conditional_edges("call_llm", tools_condition)
+    # After tool execution, loop back so LLM can process the result
+    graph.add_edge("tools", "call_llm")
 
-    graph.add_edge(START, "embedding")    
-    graph.add_edge("embedding", END)
-
-    # Run the graph with an initial state (can be empty for this test)
-    initial_state = {'query': "What is the stock price of AAPL?"}
+    initial_state = {"messages": [HumanMessage(content="Can you check news for TSLA over the last 2 days?")]}
     graph_build.run_graph(graph, initial_state)
 
     print("Basic graph test completed successfully.")

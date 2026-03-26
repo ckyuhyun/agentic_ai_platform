@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from agentic_ai_platform.rag.embedding import EmbeddingModel
+from agentic_ai_platform.rag.embedded_model_list import EmbeddingModel
 
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_ollama import ChatOllama, OllamaEmbeddings

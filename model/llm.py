@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langchain.chat_models import init_chat_model
 
@@ -15,13 +15,28 @@ class llm:
 
         self.model_name = model_name
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
-        self.model = self._llm_model_init_()
+        self.llm_model = self._llm_model_init_()
+        self.llm_instance = self.llm_model
 
+    def bind_tools(self, tools: list):
+        """Bind tools to the LLM so it can call them during inference."""
+        self.llm_instance = self.llm_model.bind_tools(tools)
+        
     
-    
-    def chat(self, 
-             messages) -> str:
-        response =self.model.invoke(messages)
+    def prompt(self, 
+             system_message: str = None,
+             human_message: str = None) -> str:
+        """
+        Invoke the LLM with the given system and human messages, and return the response.
+        """
+        message = []
+
+        if system_message:
+            message.append(SystemMessage(content=system_message))
+        if human_message:
+            message.append(HumanMessage(content=human_message))
+
+        response =self.llm_instance.invoke(message)
         return response
     
     def _llm_model_init_(self):
@@ -30,7 +45,7 @@ class llm:
         model = None
         if self.model_name in _ollama_models or ":" in self.model_name and not self.model_name.startswith("gpt"):
             model = ChatOllama(
-                model="llama3:latest",
+                model="llama3.1:latest",
                 base_url=self.OLLAMA_BASE_URL,
                 num_ctx=8192,
                 temperature=0,
