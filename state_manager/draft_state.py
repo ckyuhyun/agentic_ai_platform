@@ -1,7 +1,9 @@
+import operator
 from typing import Annotated, Optional, List
 from pydantic import BaseModel, Field
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
+
 
 
 class CriticFeedback(BaseModel):
@@ -17,7 +19,7 @@ class DraftState(BaseModel):
     """State shared between the drafter and critic nodes."""
 
     # Task definition
-    task: str = Field(description="The task or prompt the drafter must complete")
+    task: Annotated[str, operator.add] = Field(description="The task or prompt the drafter must complete")
     system_prompt: Optional[str] = Field(
         default=None,
         description="Optional system-level instruction to shape both drafter and critic behaviour"

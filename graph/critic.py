@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from agentic_ai_platform.model.llm import llm
 from agentic_ai_platform.state_manager.draft_state import DraftState, CriticFeedback
+from agentic_ai_platform.utils.color_print import cprint, C
 
 
 _CRITIC_SYSTEM = (
@@ -66,6 +67,13 @@ def make_critic_node(schema: Type[BaseModel]):
         ]
 
         feedback = structured_model.invoke(prompt)
+        cprint(f"\n── Critic Feedback ──────────────────────────────")
+        cprint(f"=> Score: {feedback.score:.2f}", C.CYAN)
+        cprint(f"=> Approved: {feedback.approved}", C.CYAN)
+        cprint(f"=> Issues:\n" + "\n".join(f"   - {i}" for i in feedback.issues), C.CYAN)
+        cprint(f"=> Suggestions:\n" + "\n".join(f"   - {s}" for s in feedback.suggestions), C.CYAN)
+        cprint(f"=> Reasoning:\n   {feedback.reasoning}", C.CYAN)
+        print(f"\n──────────────────────────────────────────────────")
 
         # Enforce threshold against the score field
         feedback.approved = feedback.score >= state.approval_threshold

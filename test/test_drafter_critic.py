@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 
+from agentic_ai_platform.graph.graph_build import GraphBuild
 from agentic_ai_platform.state_manager.draft_state import DraftState
 from agentic_ai_platform.graph.drafter import make_drafter_node
 from agentic_ai_platform.graph.critic import make_critic_node, _route
@@ -11,7 +12,7 @@ from agentic_ai_platform.state_manager.draft_state import CriticFeedback
 
 
 
-def build_drafter_critic_graph() -> StateGraph:
+def build_drafter_critic_graph():
     critic_node = make_critic_node(CriticFeedback)
     drafter_node = make_drafter_node(DraftState)
 
@@ -20,7 +21,8 @@ def build_drafter_critic_graph() -> StateGraph:
     graph.add_node("drafter", drafter_node)
     graph.add_node("critic", critic_node)
 
-    graph.add_edge(START, "drafter")
+    #graph.add_edge(START, "drafter")
+    graph.set_entry_point("drafter")
     graph.add_edge("drafter", "critic")
     graph.add_conditional_edges(
         "critic",
@@ -28,7 +30,7 @@ def build_drafter_critic_graph() -> StateGraph:
         {"drafter": "drafter", "end": END},
     )
 
-    return graph.compile()
+    return graph
 
 
 def run(task: str, system_prompt: str = None, max_iterations: int = 3):
@@ -41,15 +43,18 @@ def run(task: str, system_prompt: str = None, max_iterations: int = 3):
         approval_threshold=0.8,
     )
 
-    final_state = app.invoke(initial_state)
+    graph = GraphBuild()
+    graph.run_graph(app, initial_state)
 
-    print(f"\n── Final output (after {final_state['iteration']} iteration(s)) ──")
-    print(final_state["final_output"])
+    # final_state = app.invoke(initial_state)
 
-    critique = final_state.get("critique")
-    if critique:
-        print(f"\nCritic score : {critique.score:.2f}  |  approved: {critique.approved}")
-        print(f"Reasoning    : {critique.reasoning}")
+    # print(f"\n── Final output (after {final_state['iteration']} iteration(s)) ──")
+    # print(final_state["final_output"])
+
+    # critique = final_state.get("critique")
+    # if critique:
+    #     print(f"\nCritic score : {critique.score:.2f}  |  approved: {critique.approved}")
+    #     print(f"Reasoning    : {critique.reasoning}")
 
 
 if __name__ == "__main__":

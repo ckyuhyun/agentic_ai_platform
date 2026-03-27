@@ -59,7 +59,7 @@ from agentic_ai_platform.rag.embedding import (
     SENTENCE_TRANSFORMERS_AVAILABLE,
     SearchMode
 )
-from utils.color_print import cprint
+from agentic_ai_platform.utils.color_print import cprint
 
 
 # =============================================================================

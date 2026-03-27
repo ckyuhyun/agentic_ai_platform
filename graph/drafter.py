@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from agentic_ai_platform.model.llm import llm
 from agentic_ai_platform.state_manager.draft_state import DraftState
+from agentic_ai_platform.utils.color_print import C, cprint
 
 
 _DEFAULT_SYSTEM = (
@@ -46,7 +47,11 @@ def make_drafter_node(schema : Type[BaseModel]):
             messages.append(HumanMessage(content=revision_prompt))
 
         response = model.invoke(messages)
-        new_draft = response.content.strip()
+        new_draft = response.content.strip() 
+
+        print(f"\n── Generated New Draft ───────────────────────────")
+        cprint(f"=> {new_draft}", C.YELLOW)
+        print(f"\n──────────────────────────────────────────────────")
 
         return {
             "draft": new_draft,
