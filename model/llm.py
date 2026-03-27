@@ -15,12 +15,12 @@ class llm:
 
         self.model_name = model_name
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
-        self.llm_model = self._llm_model_init_()
-        self.llm_instance = self.llm_model
+        self._llm_model_ = self._llm_model_init_()
+        self.llm_instance = self._llm_model_
 
     def bind_tools(self, tools: list):
         """Bind tools to the LLM so it can call them during inference."""
-        self.llm_instance = self.llm_model.bind_tools(tools)
+        self.llm_instance = self._llm_model_.bind_tools(tools)
         
     
     def prompt(self, 
