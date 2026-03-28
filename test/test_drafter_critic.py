@@ -2,9 +2,10 @@ from langgraph.graph import StateGraph, START, END
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
 from agentic_ai_platform.state_manager.draft_state import DraftState
-from agentic_ai_platform.graph.drafter import make_drafter_node
-from agentic_ai_platform.graph.critic import make_critic_node, _route
+from agentic_ai_platform.graph.drafter_critic.drafter import make_drafter_node
+from agentic_ai_platform.graph.drafter_critic.critic import make_critic_node, _route
 from agentic_ai_platform.state_manager.draft_state import CriticFeedback
+from agentic_ai_platform.utils.snapshot_print import print_snapshot
 
 
 
@@ -45,6 +46,12 @@ def run(task: str, system_prompt: str = None, max_iterations: int = 3):
 
     graph = GraphBuild()
     graph.run_graph(app, initial_state)
+    snapshot = graph.get_state()
+    print_snapshot(snapshot)
+    
+
+    
+
 
     # final_state = app.invoke(initial_state)
 
