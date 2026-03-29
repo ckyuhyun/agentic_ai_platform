@@ -14,8 +14,9 @@ from agentic_ai_platform.utils.snapshot_print import print_snapshot
 
 
 def build_drafter_critic_graph():
-    critic_node = make_critic_node(CriticFeedback)
     drafter_node = make_drafter_node(DraftState)
+    critic_node = make_critic_node(CriticFeedback)
+    
 
     graph = StateGraph(DraftState)
 
@@ -45,7 +46,8 @@ def run(task: str, system_prompt: str = None, max_iterations: int = 3):
     )
 
     graph = GraphBuild()
-    graph.run_graph(app, initial_state)
+    graph.run_graph(app, initial_state, stream_mode=["values", "custom", "updates"])
+    #graph.run_graph(app, initial_state)
     snapshot = graph.get_state()
     print_snapshot(snapshot)
     
