@@ -52,7 +52,7 @@ def make_critic_node(schema: Type[BaseModel]):
 
         critic_node = make_critic_node(MyFeedback)
     """
-    def critic_node(state: DraftState) -> dict:
+    def critic_node(state: DraftState) -> DraftState:
         base_model = llm("llama3.1").llm_instance
         structured_model = base_model.with_structured_output(schema)
         
@@ -83,11 +83,11 @@ def make_critic_node(schema: Type[BaseModel]):
         if feedback.approved or state.iteration >= state.max_iterations:
             final = state.draft
 
-        return {
-            "critique": feedback,
-            "final_output": final,
-            "messages": [],
-        }
+        state.critique = feedback
+        state.final_output = final
+        state.messages = []
+
+        return state
 
     return critic_node
 

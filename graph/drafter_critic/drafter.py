@@ -22,7 +22,7 @@ def make_drafter_node(schema : Type[BaseModel]):
         schema: The Pydantic model class representing the state. Must include `task`, `draft`, `iteration`, and `critique` fields.
                 Default is DraftState, but you can use a custom model as long as it has those fields.
     """
-    def drafter_node(state: DraftState) -> dict:
+    def drafter_node(state: DraftState) -> DraftState:
         model = llm(state.system_prompt or "llama3.1").llm_instance
 
         messages = []
@@ -53,11 +53,12 @@ def make_drafter_node(schema : Type[BaseModel]):
         cprint(f"=> {new_draft}", C.YELLOW)
         print(f"\n──────────────────────────────────────────────────")
 
-        return {
-            "draft": new_draft,
-            "iteration": state.iteration + 1,
-            "messages": [response],
-        }
+
+        state.draft = new_draft
+        state.iteration += 1
+        state.messages.append(response)
+        return state
+        
 
     return drafter_node
 

@@ -50,21 +50,21 @@ class GraphBuild:
     def _handle_values(self, chunk: dict):
         """chunk is the full state dict emitted after each node completes."""
         for key, value in chunk.items():
-            print(f"  [values] {key}: {str(value)[:120]}")
+            print(f"  [values] {key}: {str(value)}")
 
     def _handle_messages(self, chunk: tuple):
         """chunk is (message, metadata) — emitted token by token."""
         for key, value in chunk.items():
-            print(f"  [messages] {key}: {str(value)[:120]}")
+            print(f"  [messages] {key}: {str(value)}")
 
     def _handle_custom(self, chunk: Any):
         """chunk is whatever the node emits via streamable() / dispatch_custom_event."""
-        print(f"  [custom] {str(chunk)[:120]}")
+        print(f"  [custom] {str(chunk)}")
 
     def _handle_updates(self, chunk: Any):
         """chunk is the updated state dict emitted after each node completes."""
         for key, value in chunk.items():
-            print(f"  [updates] {key}: {str(value)[:120]}")
+            print(f"  [updates] {key}: {str(value)}")
 
 
     # ── state access ──────────────────────────────────────────────────────────
