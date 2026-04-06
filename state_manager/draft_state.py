@@ -3,6 +3,7 @@ from typing import Annotated, Optional, List
 from pydantic import BaseModel, Field
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
+from agentic_ai_platform.state_manager.tool_state import ToolState
 
 
 
@@ -30,6 +31,9 @@ class DraftState(BaseModel):
 
     # Critic output
     critique: Optional[CriticFeedback] = Field(default=None, description="Structured feedback from the critic")
+
+    # Tool output history (if using tools)
+    tool_calls: List[ToolState] = Field(default_factory=list, description="History of tool calls made during drafting, if any")
 
     # Loop control
     iteration: int = Field(default=0, description="Number of draft/critique cycles completed")

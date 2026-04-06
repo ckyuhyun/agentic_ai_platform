@@ -2,7 +2,7 @@ from typing import Type
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from agentic_ai_platform.model.llm import llm
+from agentic_ai_platform.llm.llm import LLM
 from agentic_ai_platform.state_manager.draft_state import DraftState, CriticFeedback
 from agentic_ai_platform.utils.color_print import cprint, C
 
@@ -25,11 +25,14 @@ def _route(state: DraftState) -> str:
     if state.critique and state.critique.approved:
         return "end"
     if state.iteration >= state.max_iterations:
-        return "end"
+        return "human_review"
     return "drafter"
 
 
-def make_critic_node(schema: Type[BaseModel]):
+def create_critic_agent(schema: Type[BaseModel],
+                        tool_llm=None,
+                        graph_llm=None,
+                        tools=None):
     """
     Factory that returns a critic node bound to the given Pydantic schema.
 
@@ -53,8 +56,8 @@ def make_critic_node(schema: Type[BaseModel]):
         critic_node = make_critic_node(MyFeedback)
     """
     def critic_node(state: DraftState) -> DraftState:
-        base_model = llm("llama3.1").llm_instance
-        structured_model = base_model.with_structured_output(schema)
+        
+        structured_model = graph_llm.with_structured_output(schema)
         
 
         prompt = [
@@ -76,12 +79,12 @@ def make_critic_node(schema: Type[BaseModel]):
         print(f"\n──────────────────────────────────────────────────")
 
         # Enforce threshold against the score field
-        feedback.approved = feedback.score >= state.approval_threshold
+        feedback.approved = False #feedback.score >= state.approval_threshold
 
 
         final = None
-        if feedback.approved or state.iteration >= state.max_iterations:
-            final = state.draft
+        #if feedback.approved or state.iteration >= state.max_iterations:
+        #    final = state.draft
 
         state.critique = feedback
         state.final_output = final

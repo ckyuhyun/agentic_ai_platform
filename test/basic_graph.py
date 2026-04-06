@@ -3,7 +3,7 @@ from typing import Annotated
 from pydantic import BaseModel
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
-from agentic_ai_platform.model.llm import llm
+from agentic_ai_platform.llm.llm import LLM
 
 from langchain_core.messages import AnyMessage, HumanMessage
 from langchain_core.tools import tool
@@ -24,7 +24,7 @@ def search_final_news(ticket: str, days_back: int) -> str:
 
 tools = [search_final_news]
 
-llm_instance = llm("llama3.1")
+llm_instance = LLM("llama3.1")
 llm_instance.bind_tools(tools)
 
 

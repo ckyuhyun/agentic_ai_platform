@@ -9,7 +9,7 @@ from agentic_ai_platform.graph.embedded_model_decision import OLLAMA_BASE_URL
 
 
 
-class llm:
+class LLM:
     def __init__(self, model_name: str):
         load_dotenv()
 
