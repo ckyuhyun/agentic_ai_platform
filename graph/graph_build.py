@@ -25,11 +25,14 @@ class GraphBuild:
         self.app = graph.compile(checkpointer=checkpoints)
         self.config = {"configurable": {"thread_id": "1"}}
 
-        for chunk in self.app.stream(init_state, 
-                                     config=self.config, 
-                                     stream_mode=stream_mode,
-                                     version="v2"):
-            self._handle_chunk(chunk)
+        try:
+            for chunk in self.app.stream(init_state, 
+                                        config=self.config, 
+                                        stream_mode=stream_mode,
+                                        version="v2"):
+                self._handle_chunk(chunk)
+        except ValueError as e:
+            RuntimeError(f"Error during graph execution: {str(e)}")
 
     # ── chunk handlers ────────────────────────────────────────────────────────
 

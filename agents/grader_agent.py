@@ -24,17 +24,17 @@ def _route(state: DraftState) -> str:
         return "end"
     if state.critique and state.critique.approved:
         return "end"
-    if state.iteration >= state.max_iterations:
-        return "human_review"
+    # if state.iteration >= state.drafter_config.max_iterations:
+    #     return "human_review"
     return "drafter"
 
 
-def create_critic_agent(schema: Type[BaseModel],
+def create_grader_agent(schema: Type[BaseModel],
                         tool_llm=None,
                         graph_llm=None,
                         tools=None):
     """
-    Factory that returns a critic node bound to the given Pydantic schema.
+    Factory that returns a grader node bound to the given Pydantic schema.
 
     The returned node calls with_structured_output(schema) so the LLM is
     forced to produce a valid instance of that model — no JSON parsing needed.
@@ -65,26 +65,26 @@ def create_critic_agent(schema: Type[BaseModel],
             HumanMessage(content=(
                 f"Original task:\n{state.task}\n\n"
                 f"Draft to evaluate:\n{state.draft}\n\n"
-                f"Approval threshold: {state.approval_threshold}"
+                f"Approval threshold: {state.drafter_config.approval_threshold}"
             )),
         ]
 
         feedback = structured_model.invoke(prompt)
-        cprint(f"\n── Critic Feedback ──────────────────────────────")
-        cprint(f"=> Score: {feedback.score:.2f}", C.CYAN)
-        cprint(f"=> Approved: {feedback.approved}", C.CYAN)
-        cprint(f"=> Issues:\n" + "\n".join(f"   - {i}" for i in feedback.issues), C.CYAN)
-        cprint(f"=> Suggestions:\n" + "\n".join(f"   - {s}" for s in feedback.suggestions), C.CYAN)
-        cprint(f"=> Reasoning:\n   {feedback.reasoning}", C.CYAN)
-        print(f"\n──────────────────────────────────────────────────")
+        #cprint(f"\n── Critic Feedback ──────────────────────────────")
+        #cprint(f"=> Score: {feedback.score:.2f}", C.CYAN)
+        #cprint(f"=> Approved: {feedback.approved}", C.CYAN)
+        #cprint(f"=> Issues:\n" + "\n".join(f"   - {i}" for i in feedback.issues), C.CYAN)
+        #cprint(f"=> Suggestions:\n" + "\n".join(f"   - {s}" for s in feedback.suggestions), C.CYAN)
+        #cprint(f"=> Reasoning:\n   {feedback.reasoning}", C.CYAN)
+        #print(f"\n──────────────────────────────────────────────────")
 
         # Enforce threshold against the score field
-        feedback.approved = False #feedback.score >= state.approval_threshold
+        feedback.approved = feedback.score >= state.drafter_config.approval_threshold and feedback.issues == []
 
 
         final = None
-        #if feedback.approved or state.iteration >= state.max_iterations:
-        #    final = state.draft
+        if feedback.approved or state.iteration >= state.drafter_config.max_iterations:
+            final = state.draft
 
         state.critique = feedback
         state.final_output = final

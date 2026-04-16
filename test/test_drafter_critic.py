@@ -2,9 +2,9 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
-from agentic_ai_platform.state_manager.draft_state import DraftState
+from agentic_ai_platform.state_manager.draft_state import DraftConfig, DraftState
 from agentic_ai_platform.agents.drafter_agent import create_drafter_agent
-from agentic_ai_platform.agents.critic_agent import create_critic_agent, _route
+from agentic_ai_platform.agents.grader_agent import create_grader_agent, _route
 from agentic_ai_platform.graph.human_in_loop import HITL
 from agentic_ai_platform.state_manager.draft_state import CriticFeedback
 from agentic_ai_platform.utils.snapshot_print import print_snapshot
@@ -43,8 +43,9 @@ def build_drafter_critic_graph():
     drafter_node = create_drafter_agent(DraftState,
                                         tool_llm=LLM("llama3.1").llm_instance,
                                          graph_llm=LLM("llama3.1").llm_instance,
-                                         tools=[Tools.search_rag])
-    critic_node = create_critic_agent(CriticFeedback)
+                                         tools=[Tools.search_rag, Tools.search_web])
+    critic_node = create_grader_agent(CriticFeedback,
+                                      graph_llm=LLM("llama3.1").llm_instance)
     
 
     graph = StateGraph(DraftState)
@@ -59,7 +60,9 @@ def build_drafter_critic_graph():
     graph.add_conditional_edges(
         "critic",
         _route,
-        {"drafter": "drafter", "end": END, "human_review": "human_review"},
+        {"drafter": "drafter", 
+         "end": END, 
+         "human_review": "human_review"},
     )
 
     return graph
@@ -74,8 +77,7 @@ def run(task: str,
     initial_state = DraftState(
         task=task,
         system_prompt=system_prompt,
-        max_iterations=max_iterations,
-        approval_threshold=0.8,
+        drafter_config=DraftConfig(max_iterations=max_iterations, approval_threshold=0.8),
     )
 
     graph = GraphBuild()
@@ -101,10 +103,11 @@ def run(task: str,
 
 if __name__ == "__main__":
     run(
-        task="Write a 3-sentence summary of why diversification matters in a stock portfolio.",
+        task="I would like to get some queries to ask how to invest in stocks well" \
+        "",
         system_prompt=(
-            "You are a skilled writer. Complete the task given to you as thoroughly and clearly as possible. "
-            "If you receive feedback from a previous critique, revise your draft to address every issue raised."
+            "You are a professional financial advisor. you have speical and deep expertise in tech stock investment and primary have been invested in the states market. " \
+            "Provide clear and concise guidance on stock investment strategies."
         ),
-        max_iterations=1,
+        max_iterations=3,
     )

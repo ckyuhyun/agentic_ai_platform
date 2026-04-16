@@ -5,13 +5,18 @@ from pydantic import BaseModel
 from agentic_ai_platform.llm.llm import LLM
 from agentic_ai_platform.state_manager.draft_state import DraftState
 from agentic_ai_platform.state_manager.tool_state import ToolState
+from agentic_ai_platform.tools.tool import Tools
 from agentic_ai_platform.utils.color_print import C, cprint
+
+
+
 
 
 def create_drafter_agent(schema: Type[BaseModel],
                          tool_llm=None,
                          graph_llm=None,
                          tools=None):
+    
     """
     Factory that returns a drafter node bound to the given Pydantic schema.
 
@@ -46,37 +51,39 @@ def create_drafter_agent(schema: Type[BaseModel],
             messages.append(HumanMessage(content=revision_prompt))
 
         tool_llm_chain = tool_llm.bind_tools(tools)
-        response = tool_llm_chain.invoke("I would like to get any information for Rivian")
+        response = tool_llm_chain.invoke(messages)
 
+        new_draft = None
         if hasattr(response, "tool_calls") and response.tool_calls:
             # If the LLM called any tools, we assume the final draft is in the last tool call's output
             for call in response.tool_calls:
-                cprint(f"\n── Tool Called: {call['name']} ──────────────────────", C.MAGENTA)
-                cprint(f"=> Input:\n{call['args']}", C.MAGENTA)                
+                #cprint(f"\n── Tool Called: {call['name']} ──────────────────────", C.MAGENTA)
+                #cprint(f"=> Input:\n{call['args']}", C.MAGENTA)                
 
-                if call['name'] in [k['tool_name'] for k in state.tool_calls]:
-                    state.tool_calls.pop( state.tool_calls.index(call['args']))
+                # if call['name'] in [k.tool_name for k in state.tool_calls]:
+                #     #state.tool_calls.pop( state.tool_calls.index(call['name']))
 
-                tool_result = tools[0].invoke(call['args'])  # Call the tool with the provided arguments
+                tool_result = next(x for x in tools if x.name == call['name']).invoke(call['args'])  # Call the tool with the provided arguments
+                #new_draft = tool_result if isinstance(tool_result, str) else str(tool_result)
                 state.tool_calls.append(ToolState(query= call['args']['query'], 
                                                   tool_name=call['name'],
                                                   tool_args=call['args'], 
                                                   tool_result=tool_result))
 
-                if tool_result is None or (isinstance(tool_result, str) and tool_result.strip() == ""):
-                    cprint( f"No result returned from tool({call['name']}) => {call['args']}", C.MAGENTA)
-                else:
-                    cprint(f"=> Output:\n{tool_result}", C.MAGENTA)
-                print(f"──────────────────────────────────────────────────")
+                # if tool_result is None or (isinstance(tool_result, str) and tool_result.strip() == ""):
+                #     cprint( f"No result returned from tool({call['name']}) => {call['args']}", C.MAGENTA)
+                # else:
+                #     cprint(f"=> Output:\n{tool_result}", C.MAGENTA)
+                # print(f"──────────────────────────────────────────────────")
 
             
 
         response = graph_llm.invoke(messages)
         new_draft = response.content.strip() 
 
-        print(f"\n── Generated New Draft ───────────────────────────")
-        cprint(f"=> {new_draft}", C.YELLOW)
-        print(f"\n──────────────────────────────────────────────────")
+        #print(f"\n── Generated New Draft ───────────────────────────")
+        #cprint(f"=> {new_draft}", C.YELLOW)
+        #print(f"\n──────────────────────────────────────────────────")
 
 
         state.draft = new_draft
