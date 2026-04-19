@@ -6,14 +6,22 @@ from langchain_core.runnables import RunnableConfig
 
 from typing import Any, Literal, Optional
 
+try:
+    from agentic_ai_platform.eval.langsmith.note_trace import post_trace
+    from langsmith import Client as LangSmithClient
+    LANGSMITH_AVAILABLE = True
+except Exception:
+    LANGSMITH_AVAILABLE = False
+
 
 StreamMode = Literal["values", "messages", "custom", "updates"]
 
 
 class GraphBuild:
-    def __init__(self):
+    def __init__(self, enabled_persistentMemory=True):
         self.app = None
         self.config: Optional[RunnableConfig] = None
+        self.enabled_persistentMemory = enabled_persistentMemory
 
     def run_graph(
         self,
@@ -22,17 +30,30 @@ class GraphBuild:
         stream_mode: StreamMode = "values",
     ):
         checkpoints = InMemorySaver()
-        self.app = graph.compile(checkpointer=checkpoints)
-        self.config = {"configurable": {"thread_id": "1"}}
+        if self.enabled_persistentMemory:
+            self.app = graph.compile(checkpointer=checkpoints)
+        else:
+            self.app = graph.compile()
+
+        self.config = {
+            "configurable": {"thread_id": "1"},
+            "metadata" : {"run_name": "LLM_service", "task": str(init_state.task)}
+            }
+
 
         try:
-            for chunk in self.app.stream(init_state, 
-                                        config=self.config, 
+            for chunk in self.app.stream(init_state,
+                                        config=self.config,
                                         stream_mode=stream_mode,
                                         version="v2"):
                 self._handle_chunk(chunk)
         except ValueError as e:
             RuntimeError(f"Error during graph execution: {str(e)}")
+
+        #if LANGSMITH_AVAILABLE:
+        #   self._post_traces_to_langsmith()
+
+        
 
     # ── chunk handlers ────────────────────────────────────────────────────────
 
@@ -70,6 +91,19 @@ class GraphBuild:
             print(f"  [updates] {key}: {str(value)}")
 
 
+    def _post_traces_to_langsmith(self):
+        snapshot = self.get_state()
+        if not snapshot:
+            return
+        node_traces = snapshot.values.get("node_traces", [])
+        if not node_traces:
+            return
+        ls = LangSmithClient()
+        project = (self.config or {}).get("metadata", {}).get("run_name", "default")
+        runs = list(ls.list_runs(project_name=project, limit=1, is_root=True))
+        if runs:
+            post_trace(str(runs[0].id), node_traces)
+
     # ── state access ──────────────────────────────────────────────────────────
 
     def get_state(self) -> Optional[StateSnapshot]:
@@ -77,3 +111,4 @@ class GraphBuild:
         if self.app is None or self.config is None:
             return None
         return self.app.get_state(self.config)
+        

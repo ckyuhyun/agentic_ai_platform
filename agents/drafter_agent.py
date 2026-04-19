@@ -3,7 +3,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from agentic_ai_platform.llm.llm import LLM
-from agentic_ai_platform.state_manager.draft_state import DraftState
+from agentic_ai_platform.state_manager.draft_state import DraftState, NodeTrace
 from agentic_ai_platform.state_manager.tool_state import ToolState
 from agentic_ai_platform.tools.tool import Tools
 from agentic_ai_platform.utils.color_print import C, cprint
@@ -27,18 +27,14 @@ def create_drafter_agent(schema: Type[BaseModel],
                 Default is DraftState, but you can use a custom model as long as it has those fields.
     """
     def drafter_node(state: DraftState) -> DraftState:
-        
+        trace = NodeTrace.start(node="drafter", iteration=state.iteration, model="llama3.1")
 
         messages = []
-
-        system_text = state.system_prompt
-        messages.append(SystemMessage(content=system_text))
+        messages.append(SystemMessage(content=state.system_prompt or ""))
 
         if state.iteration == 0 or state.critique is None:
-            # First draft
             messages.append(HumanMessage(content=f"Task:\n{state.task}"))
         else:
-            # Revision — include previous draft and critique
             critique = state.critique
             revision_prompt = (
                 f"Task:\n{state.task}\n\n"
@@ -53,42 +49,27 @@ def create_drafter_agent(schema: Type[BaseModel],
         tool_llm_chain = tool_llm.bind_tools(tools)
         response = tool_llm_chain.invoke(messages)
 
-        new_draft = None
+        tools_invoked = []
         if hasattr(response, "tool_calls") and response.tool_calls:
-            # If the LLM called any tools, we assume the final draft is in the last tool call's output
             for call in response.tool_calls:
-                #cprint(f"\n── Tool Called: {call['name']} ──────────────────────", C.MAGENTA)
-                #cprint(f"=> Input:\n{call['args']}", C.MAGENTA)                
-
-                # if call['name'] in [k.tool_name for k in state.tool_calls]:
-                #     #state.tool_calls.pop( state.tool_calls.index(call['name']))
-
-                tool_result = next(x for x in tools if x.name == call['name']).invoke(call['args'])  # Call the tool with the provided arguments
-                #new_draft = tool_result if isinstance(tool_result, str) else str(tool_result)
-                state.tool_calls.append(ToolState(query= call['args']['query'], 
-                                                  tool_name=call['name'],
-                                                  tool_args=call['args'], 
-                                                  tool_result=tool_result))
-
-                # if tool_result is None or (isinstance(tool_result, str) and tool_result.strip() == ""):
-                #     cprint( f"No result returned from tool({call['name']}) => {call['args']}", C.MAGENTA)
-                # else:
-                #     cprint(f"=> Output:\n{tool_result}", C.MAGENTA)
-                # print(f"──────────────────────────────────────────────────")
-
-            
+                tool_result = next(x for x in tools if x.name == call["name"]).invoke(call["args"])
+                tools_invoked.append(call["name"])
+                state.tool_calls.append(ToolState(
+                    query=call["args"].get("query", ""),
+                    tool_name=call["name"],
+                    tool_args=call["args"],
+                    tool_result=tool_result,
+                ))
 
         response = graph_llm.invoke(messages)
-        new_draft = response.content.strip() 
-
-        #print(f"\n── Generated New Draft ───────────────────────────")
-        #cprint(f"=> {new_draft}", C.YELLOW)
-        #print(f"\n──────────────────────────────────────────────────")
-
+        new_draft = response.content.strip()
 
         state.draft = new_draft
         state.iteration += 1
         state.messages.append(response)
+        state.node_traces.append(
+            trace.finish(tool_calls_made=tools_invoked, draft_len=len(new_draft))
+        )
         return state
         
 

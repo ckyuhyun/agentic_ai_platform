@@ -81,10 +81,8 @@ def run(task: str,
     )
 
     graph = GraphBuild()
-    graph.run_graph(app, initial_state, stream_mode=["values", "custom", "updates"])
-    #graph.run_graph(app, initial_state)
-    snapshot = graph.get_state()
-    print_snapshot(snapshot)
+    graph.run_graph(app, initial_state, stream_mode=["values", "custom", "updates"])   
+    
     
 
     
