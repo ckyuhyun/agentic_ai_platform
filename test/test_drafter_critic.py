@@ -2,15 +2,17 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
+from agentic_ai_platform.prompt_storage.prompt_hub import prompt_hub
 from agentic_ai_platform.state_manager.draft_state import DraftConfig, DraftState
 from agentic_ai_platform.agents.drafter_agent import create_drafter_agent
-from agentic_ai_platform.agents.grader_agent import create_grader_agent, _route
+from agentic_ai_platform.agents.grader_agents.grader_agent import create_grader_agent, _route
 from agentic_ai_platform.graph.human_in_loop import HITL
 from agentic_ai_platform.state_manager.draft_state import CriticFeedback
 from agentic_ai_platform.utils.snapshot_print import print_snapshot
 from agentic_ai_platform.llm.llm import LLM
 
 from agentic_ai_platform.tools.tool import Tools
+from langchain_core.messages import HumanMessage
 
 
 def human_review_node(state: DraftState) -> DraftState:
@@ -36,7 +38,7 @@ def human_review_node(state: DraftState) -> DraftState:
 
     return state
 
-
+    
 
 def build_drafter_critic_graph():
 
@@ -44,7 +46,11 @@ def build_drafter_critic_graph():
                                         tool_llm=LLM("llama3.1").llm_instance,
                                          graph_llm=LLM("llama3.1").llm_instance,
                                          tools=[Tools.search_rag, Tools.search_web])
+    
+    critic_prompt = prompt_hub(prompt_type='critic').get_system_prompt()
+
     critic_node = create_grader_agent(CriticFeedback,
+                                      system_prompt=critic_prompt,
                                       graph_llm=LLM("llama3.1").llm_instance)
     
 
