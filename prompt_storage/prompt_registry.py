@@ -32,13 +32,15 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 from langchain_core.messages import SystemMessage
 
-PromptType = Literal["critic", "drafter", "planner"]
+from agentic_ai_platform.enum.prompt_type import PromptType
+
+
 
 @dataclass
 class PromptVersion:
-    prompt_type: str
+    prompt_type: PromptType
     version_id: str
-    content: str
+    prompt: str
     description: str               = ""
     created_at: datetime           = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime           = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -46,7 +48,7 @@ class PromptVersion:
 
     def as_messages(self) -> List[SystemMessage]:
         """Return as a LangChain message list ready to prepend to a prompt."""
-        return [SystemMessage(content=self.content)]
+        return [SystemMessage(content=self.prompt)]
 
     def __repr__(self) -> str:
         return (
@@ -57,7 +59,7 @@ class PromptVersion:
 
 class PromptRegistry:
     def __init__(self):
-        self.prompts_storage: Dict[str, Dict[str, PromptVersion]] = {}
+        self.prompts_storage: Dict[str, List[PromptVersion]] = {}
 
     def register(self,
                  prompt_type: PromptType,
@@ -70,11 +72,11 @@ class PromptRegistry:
             prompt_version = PromptVersion(
                 prompt_type=prompt_type,
                 version_id=version_id,
-                content=content,
+                prompt=content,
                 description=description,
                 tags=tags,
             )
-            self.prompts_storage.setdefault(prompt_type, {})[version_id] = prompt_version
+            self.prompts_storage.setdefault(prompt_type, []).append(prompt_version)
         except:
             raise ValueError(f"Failed to register prompt version: {prompt_type} {version_id}")
             
@@ -84,18 +86,25 @@ class PromptRegistry:
     def get_prompts_by_type_version_tags(self,
                     prompt_type: PromptType,
                     version_id: Optional[str] = None,
-                    tags: Optional[List[str]] = None) -> List[PromptVersion]:
+                    tags: Optional[List[str]] = None) -> PromptVersion:
 
-        prompts = [p for p in self.prompts if p.prompt_type == prompt_type]
+        prompt_type_value = self.prompts_storage.get(prompt_type, {})
 
         if version_id is not None:
-            prompts = [p for p in prompts if p.version_id == version_id]
+            prompt_version_value = [d for d in prompt_type_value if d.version_id == version_id]
+            if len(prompt_version_value) == 0:
+                raise ValueError(f"No prompt found for type {prompt_type} with version {version_id}")
+            
+            if len(prompt_version_value) > 1:
+                raise ValueError(f"Multiple prompts found for type {prompt_type} with version {version_id}")
+        else:
+            pass
 
-        if tags is not None:
-            for t in tags:
-                prompts = [p for p in prompts if t in p.tags]
+        # if tags is not None:
+        #     for t in tags:
+        #         prompts = [p for p in prompts if t in p.tags]
 
-        return prompts
+        return prompt_version_value[0].prompt
     
  
     def update(self,
@@ -106,7 +115,7 @@ class PromptRegistry:
         
         try:
             if prompt_type in self.prompts_storage and version_id in self.prompts_storage[prompt_type]:
-                self.prompts_storage[prompt_type][version_id].content = content
+                self.prompts_storage[prompt_type][version_id].prompt = content
                 self.prompts_storage[prompt_type][version_id].description = description
                 self.prompts_storage[prompt_type][version_id].updated_at = datetime.now(timezone.utc)
             else:

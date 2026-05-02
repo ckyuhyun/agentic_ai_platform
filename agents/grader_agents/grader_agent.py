@@ -4,14 +4,14 @@ from langchain_core.tools import BaseTool
 from langchain_core.messages import HumanMessage
 
 from agentic_ai_platform.state_manager.draft_state import DraftState, NodeTrace
-from agentic_ai_platform.tools.grader_tools import GraderTools
+from agentic_ai_platform.tools.grader_tools import EvalsTools
 
 
 DEFAULT_GRADER_TOOLS: List[BaseTool] = [
-    GraderTools.check_constraints,
-    GraderTools.check_hallucinations,
-    GraderTools.check_efficiency,
-    GraderTools.check_ethical_considerations,
+    EvalsTools.check_constraints,
+    EvalsTools.check_hallucinations,
+    EvalsTools.check_efficiency,
+    EvalsTools.check_ethical_considerations,
 ]
 
 # Maps a tool name to the input key it expects
@@ -25,79 +25,94 @@ _TOOL_INPUT: dict = {
 
 
 
-def _route(state: DraftState) -> str:
-    if state.final_output is not None:
-        return "end"
-    if state.critique and state.critique.approved:
-        return "end"
-    if state.iteration >= state.drafter_config.max_iterations:
-        return "human_review"
-    return "drafter"
+
 
 
 def create_grader_agent(
     schema: Type[BaseModel],
     system_prompt: list,
     graph_llm=None,
-    tools: Optional[List[BaseTool]] = None,
+    eval_tools: Optional[List[BaseTool]] = None,
 ):
     """
     Factory that returns a grader node bound to the given Pydantic schema.
 
     schema must have: score (float), approved (bool), issues (list[str]).
 
-    tools: list of grader tools to run before the LLM call. Each tool's
-           report is appended to the prompt so the LLM can use the findings.
-           Defaults to all four GraderTools checks.
-           Pass an empty list [] to skip tool checks entirely.
+    eval_tools: list of grader tools to run before the LLM call. Each tool's
+                report is appended to the prompt so the LLM can use the findings.
+                Defaults to all four GraderTools checks.
+                Pass an empty list [] to skip tool checks entirely.
     """
     #active_tools: List[BaseTool] = DEFAULT_GRADER_TOOLS if tools is None else tools
-    tool_map: dict[str, BaseTool] = {t.name: t for t in tools} if tools is not None else {}
+    #tool_map: dict[str, BaseTool] = {t.name: t for t in eval_tools} if eval_tools is not None else {}
 
-    structured_model = graph_llm.with_structured_output(schema)
+    #structured_model = graph_llm.with_structured_output(schema)
 
-    def grader_node(state: DraftState) -> DraftState:
+    def grader_node(state: DraftState):
+
+        # start updating trace
         trace = NodeTrace.start(node="grader", iteration=state.iteration, model="llama3.1")
 
-        tool_reports = _run_tools(tool_map, state)        
+        #tool_reports = _run_eval_tools(tool_map, state)        
+        #tool_reports = run_eval_tools()
 
-        prompt = system_prompt + [
-            HumanMessage(content=_build_eval_message(state, tool_reports)),
-        ]
+        # prompt = system_prompt + [
+        #     HumanMessage(content=_build_eval_message(state, tool_reports)),
+        # ]
+        prompt = system_prompt + [HumanMessage(content=f"Task:\n{state.task}\n\nDraft:\n{state.draft}")]
 
-        feedback = structured_model.invoke(prompt)
-        feedback.approved = (
-            feedback.score >= state.drafter_config.approval_threshold
-            and feedback.issues == []
-        )
+        critic_llm = graph_llm.bind_tools(eval_tools)
+        try:
+            feedback = critic_llm.invoke(prompt)
+        
+            # feedback.approved = (
+            #     feedback.score >= state.drafter_config.approval_threshold
+            #     and feedback.issues == []
+            # )
+        except Exception as e:
+            RuntimeError(f"Error invoking grader LLM: {e}")
 
-        final = None
-        if feedback.approved or state.iteration >= state.drafter_config.max_iterations:
-            final = state.draft
+        # final = None
+        # if feedback.approved or state.iteration >= state.drafter_config.max_iterations:
+        #     final = state.draft
 
+        # feedback.hallucination_score = 0.1
+        # state.critique = feedback
+        # state.final_output = final
+        
+        # state.messages = []
+        # state.node_traces.append(
+        #     trace.finish(
+        #         score=feedback.score,
+        #         approved=feedback.approved,
+        #         issue_count=len(feedback.issues),
+        #     )
+        # )
+        
         state.critique = feedback
-        state.final_output = final
-        state.messages = []
-        state.node_traces.append(
-            trace.finish(
-                score=feedback.score,
-                approved=feedback.approved,
-                issue_count=len(feedback.issues),
-            )
-        )
-        return state
+        return {'messages' : [feedback]}
+    
+    return grader_node
     
 
     
+def run_eval_tools():
+    pass 
 
 
-
-def _run_tools(tool_map: dict, state: DraftState) -> dict[str, str]:
+def _run_eval_tools(tool_map: dict, state: DraftState) -> dict[str, str]:
     """Invoke every tool in tool_map and return {tool_name: report}."""
     reports = {}
-    for name, tool in tool_map.items():
-        tool_input = _build_tool_input(tool, state)
-        reports[name] = tool.invoke(tool_input)
+    try:
+        for name, tool in tool_map.items():
+            tool_input = _build_tool_input(tool, state)
+            if name == "check_hallucinations":
+                tool_input["state"] = state
+            reports[name] = tool.invoke(tool_input)
+    except Exception as e:
+        raise RuntimeError(f"Error invoking tool '{name}': {e}")
+
     return reports
 
 

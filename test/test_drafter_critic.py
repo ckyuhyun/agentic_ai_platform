@@ -1,19 +1,40 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
+from langgraph.prebuilt import ToolNode, tools_condition
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
 from agentic_ai_platform.prompt_storage.prompt_hub import prompt_hub
 from agentic_ai_platform.state_manager.draft_state import DraftConfig, DraftState
 from agentic_ai_platform.agents.drafter_agent import create_drafter_agent
-from agentic_ai_platform.agents.grader_agents.grader_agent import create_grader_agent, _route
+from agentic_ai_platform.agents.grader_agents.grader_agent import create_grader_agent
 from agentic_ai_platform.graph.human_in_loop import HITL
 from agentic_ai_platform.state_manager.draft_state import CriticFeedback
+from agentic_ai_platform.tools.grader_tools import EvalsTools
 from agentic_ai_platform.utils.snapshot_print import print_snapshot
 from agentic_ai_platform.llm.llm import LLM
+from agentic_ai_platform.enum.prompt_type import PromptType
+from agentic_ai_platform import prompt_registery
 
 from agentic_ai_platform.tools.tool import Tools
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
+
+
+def route(state: DraftState) -> str:
+    if state.messages[-1].tool_calls[0]['name'] == "check_hallucinations":
+        return "hallucination_check"
+    elif state.iteration >= state.drafter_config.max_iterations:
+         return "human_review"
+    elif state.critique and state.critique.approved:
+        return "end"
+    return "drafter"
+    # if state.critique.hallucination_score > 0:
+    #     return "hallucination_check"
+    # if state.critique and state.critique.approved:
+    #     return "end"
+    # if state.iteration >= state.drafter_config.max_iterations:
+    #     return "human_review"
+    # return "drafter"
 
 def human_review_node(state: DraftState) -> DraftState:
     print("\n── Human Review Required ─────────────────────────")
@@ -38,9 +59,19 @@ def human_review_node(state: DraftState) -> DraftState:
 
     return state
 
+def pre_build():
+    prompt_registery.register(
+        prompt_type="hallucination_checker",
+        version_id="0",
+        content="You are a hallucination detection module. Your task is to analyze the provided draft and identify any potential hallucinations, which are pieces of information that may be fabricated, inaccurate, or not supported by evidence. " 
+                "Focus on identifying specific patterns of hallucination, such as fabricated facts, unsupported claims, or inconsistencies with known information. " 
+                "For each potential hallucination you identify, provide a brief excerpt from the draft that illustrates the issue and categorize the severity as 'WARN' for concerning but not critical issues, or 'FAIL' for high-risk hallucinations."
+    )    
+
     
 
 def build_drafter_critic_graph():
+    pre_build()
 
     drafter_node = create_drafter_agent(DraftState,
                                         tool_llm=LLM("llama3.1").llm_instance,
@@ -49,27 +80,38 @@ def build_drafter_critic_graph():
     
     critic_prompt = prompt_hub(prompt_type='critic').get_system_prompt()
 
+
     critic_node = create_grader_agent(CriticFeedback,
                                       system_prompt=critic_prompt,
+                                      eval_tools=[EvalsTools.check_hallucinations],
                                       graph_llm=LLM("llama3.1").llm_instance)
     
+
+    eval_tools = [EvalsTools.check_hallucinations]
+    tools = ToolNode(eval_tools)
 
     graph = StateGraph(DraftState)
 
     graph.add_node("drafter", drafter_node)
     graph.add_node("critic", critic_node)
     graph.add_node("human_review", human_review_node)
+    graph.add_node("eval_tools", tools)
 
     
     graph.set_entry_point("drafter")
     graph.add_edge("drafter", "critic")
     graph.add_conditional_edges(
         "critic",
-        _route,
-        {"drafter": "drafter", 
-         "end": END, 
-         "human_review": "human_review"},
+        route,
+        {
+            "hallucination_check": "eval_tools",
+            "end": END,
+            "human_review": "human_review",
+            "drafter": "drafter",
+        },
     )
+    graph.add_edge("eval_tools", "critic")
+    graph.add_edge("human_review", END)
 
     return graph
 

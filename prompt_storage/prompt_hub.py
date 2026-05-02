@@ -12,7 +12,8 @@ class prompt_hub:
             return [
                 SystemMessage(content = 
             "You are a strict but fair critic. Evaluate the draft against the original task. "
-            "Return your evaluation as structured data matching the requested schema exactly.")
+            "Return your evaluation as structured data matching the requested schema exactly."
+            "If hallucinations are suspected from draft, please provide detailed feedback to call hallucination_checker tool for further analysis.")
             ]
         elif self.prompt_type == 'plan':
             return [

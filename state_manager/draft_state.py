@@ -4,6 +4,7 @@ from typing import Annotated, Optional, List, Union
 from pydantic import BaseModel, Field, model_validator
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
+from agentic_ai_platform.state_manager.hallucination_signal import HallucinationCheckerConfig
 from agentic_ai_platform.state_manager.tool_state import ToolState
 
 
@@ -39,7 +40,10 @@ class CriticFeedback(BaseModel):
     issues: Annotated[List[str], operator.add] = Field(default_factory=list, description="Specific problems found in the draft")
     suggestions: Annotated[List[str], operator.add] = Field(default_factory=list, description="Concrete improvements to apply")
     reasoning: Annotated[str, operator.add] = Field(description="Brief explanation of the score and decision")
-    
+
+    hallucination_config : HallucinationCheckerConfig = Field(default_factory=HallucinationCheckerConfig, description="Configuration for hallucination checking")     
+    hallucination_score : Optional[float] = Field(default=None, description="Hallucination severity score from 0 (none) to 1 (severe)")
+    hallucination_issues: Optional[List[str]] = Field(default=None, description="List of identified hallucination issues, if any")
 
 class DraftConfig(BaseModel):
     """Configuration parameters for the drafting process. and allowing writign once"""
