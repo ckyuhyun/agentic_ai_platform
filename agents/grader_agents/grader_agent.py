@@ -26,8 +26,6 @@ _TOOL_INPUT: dict = {
 
 
 
-
-
 def create_grader_agent(
     schema: Type[BaseModel],
     system_prompt: list,
