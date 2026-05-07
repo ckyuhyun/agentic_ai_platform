@@ -25,7 +25,7 @@ import json
 #         headers.setdefault("X-OpenAI-Api-Key", api_key)
 #     return weaviate.Client(url=url, additional_headers=headers)
 
-class WeaviateController:
+class WeaviateDB:
     def __init__(self):
         self.api_endpoint = "http://ollama:11434"
         self.collection_name = "Ollama_Models"
@@ -91,22 +91,3 @@ class WeaviateController:
                         #vector_config=Configure.Vectors.text2vec_ollama()
                     )            
         
-
-
-# # Example usage (remove or adapt in production):
-# if __name__ == "__main__":
-    
-#     props = [
-#         {"title": "The Matrix", "description": "A computer hacker learns about the true nature of reality and his role in the war against its controllers.", "genre": "Science Fiction"},
-#         {"title": "Spirited Away", "description": "A young girl becomes trapped in a mysterious world of spirits and must find a way to save her parents and return home.", "genre": "Animation"},
-#         {"title": "The Lord of the Rings: The Fellowship of the Ring", "description": "A meek Hobbit and his companions set out on a perilous journey to destroy a powerful ring and save Middle-earth.", "genre": "Fantasy"},
-#     ]
-#     #client = get_weaviate_client(data_objects=props)
-#     search_result()
-
-    
-#wc = WeaviateController()    
-#wc.search_query("what is the worksheet's issue?")
-#wc.read_data()
-#wc.delete_collection()
-    

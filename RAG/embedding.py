@@ -5,6 +5,9 @@ import hashlib
 from agentic_ai_platform.rag.embedded_model_list import EmbeddingModel
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
 from langchain_experimental.text_splitter import SemanticChunker
+from langchain_core.documents import Document
+
+
 
 
 # HuggingFace Embeddings (LangChain-compatible, works with SemanticChunker)
@@ -72,10 +75,31 @@ class Embeddings:
         
 
 
-    
+    def generate_embedding_documents(self, 
+                                     documents : List[Document]) -> List[Union[str]]:
+        """Generate embedding vector for single text"""
+        if self._embedding_method == "huggingface":
+            return self.embeddings.embed_documents(documents)
+        elif self._embedding_method == "openai":
+            return self.embeddings.embed_documents(documents)
+        elif self._embedding_method == "sentence_transformers":
+            return self.embeddings.encode(documents, convert_to_numpy=True).tolist()
+        elif self._embedding_method == "llama_index":
+            return [self.embeddings.get_text_embedding(t) for t in documents]
+        elif self._embedding_method == "nomic-embed-text":
+            # OLLAMA nomic-embed-text embedding mode (using OllamaEmbeddings interface)
+            return self.embeddings.embed_documents(documents)
+        else:
+            # Hash-based fallback
+            vector_size = EMBEDDING_DIMENSIONS.get(self.embedding_model_name, 384)
+            return [[((b - 128) / 128.0) for b in hashlib.sha256(t.encode()).digest()[:vector_size]] for t in documents]
 
 
-    def generate_embedding(self, text: str) -> Union[List[float], List[list[float]]]:
+    def generate_embedding_text(self, 
+                           text: str) -> Union[List[float], List[list[float]]]:
+        """
+        Generate embedding(s) for the given text. If the text is long, it will be split into semantic chunks and embeddings will be generated for each chunk.
+        """
         try:
             doc = self._create_documents_([text])
         except Exception as e:
@@ -84,7 +108,7 @@ class Embeddings:
 
         _doc = [cont for cont in doc]
         if len(_doc) == 1:
-            return self._generate_embedding(_doc[0])
+            return self._generate_embedding_text(_doc[0])
         elif len(_doc) > 1:
             return self._generate_embeddings_batch(_doc)
         else:
@@ -116,7 +140,9 @@ class Embeddings:
             # Fallback: no semantic chunking, return text as-is
             self.chunker = None
 
-    def _generate_embedding(self, text: str) -> List[float]:
+    
+
+    def _generate_embedding_text(self, text: str) -> List[float]:
         """Generate embedding vector for single text"""
         if self._embedding_method == "huggingface":
             return self.embeddings.embed_query(text)
@@ -152,7 +178,7 @@ class Embeddings:
         elif self._embedding_method == "llama_index":
             return [self.embeddings.get_text_embedding(t) for t in texts]
         else:
-            return [self._generate_embedding(t) for t in texts]
+            return [self._generate_embedding_text(t) for t in texts]
 
 
     def _create_documents_(self, texts) -> list[Union[str]]:

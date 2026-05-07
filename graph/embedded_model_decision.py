@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from dotenv import load_dotenv
 from agentic_ai_platform.rag.embedded_model_list import EmbeddingModel
 
@@ -32,25 +33,26 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
 
 class EmbeddedModelDecision:
-    def __init__(self,
-                 text: str):
+    def __init__(self, 
+                 internal_embedding_model : bool = True,
+                 model_name : Optional[EmbeddingModel] = None):
         load_dotenv()
 
         self.embeddings = None
-        self.text = text
         self.model = None
         self._embedding_method = None
-        self.__oallama_embedding_mode__()
+
+        if internal_embedding_model:
+            self.__oallama_embedding_mode__()
+        else:
+            self.__init_embededing_library_model__(model_name or EmbeddingModel.BGE_BASE)
     
     def get_auto_decided_embedding_model(self):
          return self.embeddings
     
     def get_embedding_method(self):
-        return self._embedding_method
-
-        
-    def __text_length__(self):
-        return len(self.text)
+        return self._embedding_method        
+    
     
     def __oallama_embedding_mode__(self):      
            method = "nomic-embed-text"
@@ -62,17 +64,9 @@ class EmbeddedModelDecision:
            self._embedding_method= method
 
 
-    def _init_embedding_model(self, model_name: EmbeddingModel):
-        """
-        Initialize the embedding model.
+    def __init_embededing_library_model__(self, 
+                              model_name: EmbeddingModel):
 
-        Priority order:
-        1. OpenAI (if OPENAI model selected)
-        2. HuggingFaceEmbeddings (LangChain-compatible, best for SemanticChunker)
-        3. SentenceTransformers (direct, fast inference)
-        4. LlamaIndex HuggingFace (alternative)
-        5. Hash fallback
-        """
         if model_name == EmbeddingModel.HASH:
             self.embeddings = None
             self._embedding_method = "hash"
@@ -80,14 +74,14 @@ class EmbeddedModelDecision:
             return
 
         # OpenAI embeddings
-        if model_name == EmbeddingModel.OPENAI:
+        elif model_name == EmbeddingModel.OPENAI:
             self.embeddings = OpenAIEmbeddings(model=model_name.value)
             self._embedding_method = "openai"
             print(f"✓ Using OpenAI Embeddings: {model_name.value}")
             return
 
         # HuggingFace via LangChain (preferred - compatible with SemanticChunker)
-        if HUGGINGFACE_AVAILABLE:
+        elif HUGGINGFACE_AVAILABLE:
             try:
                 self.embeddings = HuggingFaceEmbeddings(
                     model_name=model_name.value,
@@ -101,7 +95,7 @@ class EmbeddedModelDecision:
                 print(f"⚠ Failed to load HuggingFace {model_name.value}: {e}")
 
         # SentenceTransformers (direct)
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
+        elif SENTENCE_TRANSFORMERS_AVAILABLE:
             try:
                 self.embeddings = SentenceTransformer(model_name.value)
                 self._embedding_method = "sentence_transformers"
@@ -111,7 +105,7 @@ class EmbeddedModelDecision:
                 print(f"⚠ Failed to load SentenceTransformer {model_name.value}: {e}")
 
         # LlamaIndex HuggingFace
-        if LLAMA_INDEX_AVAILABLE:
+        elif LLAMA_INDEX_AVAILABLE:
             try:
                 self.embeddings = HuggingFaceEmbedding(model_name=model_name.value)
                 self._embedding_method = "llama_index"
@@ -119,6 +113,8 @@ class EmbeddedModelDecision:
                 return
             except Exception as e:
                 print(f"⚠ Failed to load via LlamaIndex: {e}")
+        else:
+            raise RuntimeError(f"Not Supported embedding model or no compatible libraries installed.({model_name})")
 
         # Fallback to hash
         self.embeddings = None

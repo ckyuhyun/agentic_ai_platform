@@ -13,7 +13,7 @@ class InboundQuery:
 
     def _embedding_processing_(self):
         emd = Embeddings()
-        self._embedding_ = emd.generate_embedding(self._query_)        
+        self._embedding_ = emd.generate_embedding_text(self._query_)        
 
 
     

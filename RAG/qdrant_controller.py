@@ -329,7 +329,7 @@ class QdrantRAGController:
             return False
 
         # Generate embedding from query
-        embeddings : Union[List[float], List[list[float]]] = self.embedding_instance.generate_embedding(data)
+        embeddings : Union[List[float], List[list[float]]] = self.embedding_instance.generate_embedding_text(data)
 
         # Generate unique ID from query
         point_id = self._generate_id(query)
@@ -473,7 +473,7 @@ class QdrantRAGController:
         expanded_query = self.query_expander(query) if self.query_expander else query
 
         # Generate embedding from expanded query
-        query_embedding = self.embedding_instance.generate_embedding(expanded_query)
+        query_embedding = self.embedding_instance.generate_embedding_text(expanded_query)
 
         # Build filters
         filters = self._build_filters(must_conditions)
@@ -509,7 +509,7 @@ class QdrantRAGController:
         if not self.reranker:
             return self._search_balanced(query, must_conditions, deserializer, limit)
 
-        query_embedding = self.embedding_instance.generate_embedding(query)
+        query_embedding = self.embedding_instance.generate_embedding_text(query)
 
         # Build filters
         filters = self._build_filters(must_conditions)
@@ -569,7 +569,7 @@ class QdrantRAGController:
         search_params: Optional[SearchParams] = None,
     ) -> Optional[Any]:
         """Execute search with given parameters"""
-        query_embedding = self.embedding_instance.generate_embedding(query)
+        query_embedding = self.embedding_instance.generate_embedding_text(query)
  
         # Build filters
         filters = self._build_filters(must_conditions)
