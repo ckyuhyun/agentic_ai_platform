@@ -1,5 +1,5 @@
 
-from typing import Union, List
+from typing import Optional, Union, List
 from enum import Enum
 import hashlib
 from agentic_ai_platform.rag.embedded_model_list import EmbeddingModel
@@ -60,15 +60,17 @@ EMBEDDING_DIMENSIONS = {
 }    
 
 
-class Embeddings:
-    def __init__(self, 
+class Embeddings(EmbeddedModelDecision):
+    def __init__(self,
+                 internal_embedding_model : bool = True,
+                 model_name : Optional[EmbeddingModel] = None,
                  embedding_model: EmbeddingModel = EmbeddingModel.MINI_LM):
+
         self.embedding_model_name = embedding_model
-        # 2. Configure the Semantic Chunker
-        # 'percentile' means it splits when a gap in meaning is in the top 5% of all gaps.
-        emd = EmbeddedModelDecision("")
-        self.embeddings = emd.get_auto_decided_embedding_model()
-        self._embedding_method = emd.get_embedding_method()
+        super().__init__(internal_embedding_model=internal_embedding_model, 
+                         model_name=model_name)
+        self.embeddings = self.get_auto_decided_embedding_model()
+        self.embedding_method = self.get_embedding_method()
         self.chunker = None
 
         self._set_chunker_()
@@ -78,17 +80,18 @@ class Embeddings:
     def generate_embedding_documents(self, 
                                      documents : List[Document]) -> List[Union[str]]:
         """Generate embedding vector for single text"""
-        if self._embedding_method == "huggingface":
+        if self.embedding_method == "huggingface":
             return self.embeddings.embed_documents(documents)
-        elif self._embedding_method == "openai":
+        elif self.embedding_method == "openai":
             return self.embeddings.embed_documents(documents)
-        elif self._embedding_method == "sentence_transformers":
+        elif self.embedding_method == "sentence_transformers":
             return self.embeddings.encode(documents, convert_to_numpy=True).tolist()
-        elif self._embedding_method == "llama_index":
+        elif self.embedding_method == "llama_index":
             return [self.embeddings.get_text_embedding(t) for t in documents]
-        elif self._embedding_method == "nomic-embed-text":
+        elif "nomic-embed-text" in self.embedding_method:
             # OLLAMA nomic-embed-text embedding mode (using OllamaEmbeddings interface)
-            return self.embeddings.embed_documents(documents)
+            page_contents = [doc.page_content for doc in documents]
+            return self.embeddings.embed_documents(page_contents)
         else:
             # Hash-based fallback
             vector_size = EMBEDDING_DIMENSIONS.get(self.embedding_model_name, 384)
@@ -117,14 +120,14 @@ class Embeddings:
 
     def _set_chunker_(self):
         """Initialize SemanticChunker. Requires a LangChain Embeddings instance."""
-        if self._embedding_method in ("huggingface", "openai"):
+        if "huggingface" in self.embedding_method or "openai" in self.embedding_method:
             # HuggingFaceEmbeddings and OpenAIEmbeddings are LangChain-compatible
             self.chunker = SemanticChunker(
                 self.embeddings,
                 breakpoint_threshold_type="percentile",
                 breakpoint_threshold_amount=95
             )
-        elif self._embedding_method == "sentence_transformers" and HUGGINGFACE_AVAILABLE:
+        elif self.embedding_method == "sentence_transformers" and HUGGINGFACE_AVAILABLE:
             # Wrap SentenceTransformer in LangChain-compatible HuggingFaceEmbeddings for chunker
             chunker_embeddings = HuggingFaceEmbeddings(
                 model_name=self.embedding_model_name.value,
@@ -144,15 +147,15 @@ class Embeddings:
 
     def _generate_embedding_text(self, text: str) -> List[float]:
         """Generate embedding vector for single text"""
-        if self._embedding_method == "huggingface":
+        if "huggingface" in self.embedding_method:
             return self.embeddings.embed_query(text)
-        elif self._embedding_method == "openai":
+        elif "openai" in self.embedding_method:
             return self.embeddings.embed_query(text)
-        elif self._embedding_method == "sentence_transformers":
+        elif "sentence_transformers" in self.embedding_method:
             return self.embeddings.encode(text, convert_to_numpy=True).tolist()
-        elif self._embedding_method == "llama_index":
+        elif "llama_index" in self.embedding_method:
             return self.embeddings.get_text_embedding(text)
-        elif self._embedding_method == "nomic-embed-text":
+        elif "nomic-embed-text" in self.embedding_method:
             # OLLAMA nomic-embed-text embedding mode (using OllamaEmbeddings interface)
             return self.embeddings.embed_query(text)
         else:
@@ -163,11 +166,11 @@ class Embeddings:
 
     def _generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings in batch for better performance"""
-        if self._embedding_method == "huggingface":
+        if self.embedding_method == "huggingface":
             return self.embeddings.embed_documents(texts)
-        elif self._embedding_method == "openai":
+        elif self.embedding_method == "openai":
             return self.embeddings.embed_documents(texts)
-        elif self._embedding_method == "sentence_transformers":
+        elif self.embedding_method == "sentence_transformers":
             embeddings = self.embeddings.encode(
                 texts,
                 batch_size=32,
@@ -175,7 +178,7 @@ class Embeddings:
                 convert_to_numpy=True
             )
             return embeddings.tolist()
-        elif self._embedding_method == "llama_index":
+        elif self.embedding_method == "llama_index":
             return [self.embeddings.get_text_embedding(t) for t in texts]
         else:
             return [self._generate_embedding_text(t) for t in texts]

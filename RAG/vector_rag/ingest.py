@@ -1,3 +1,4 @@
+import os
 
 from langchain_community.document_loaders import (
     PyPDFLoader,
@@ -27,10 +28,11 @@ def load_vector_store(directory_path:str,
 
 
 def _load_documents_from_directory_(directory_path:str, 
-                                  file_type: Literal["pdf", "txt", "docx"]):
+                                  file_type: Literal["pdf", "txt", "docx"]) -> List[Document]:
     """
     Loads documents from a specified directory based on the file type.
     """
+    
     
     loaders = DirectoryLoader(path=directory_path, 
                               glob=f"**/*.{file_type}", 
@@ -39,15 +41,15 @@ def _load_documents_from_directory_(directory_path:str,
     docs = []
 
     for loader in loaders.load():
-        docs.extend(loader)
+        docs.append(loader)
     
 
     return docs
 
 
 def _get_chunk_documents_(documents :List[Document], 
-                    chunk_size : int =100, 
-                    chunk_overlap : int=200,
+                    chunk_size : int =20, 
+                    chunk_overlap : int=5,
                     char_offset_add : bool =True) -> List[Document]:
     """
     Chunks the documents into smaller pieces using RecursiveCharacterTextSplitter.
@@ -55,8 +57,7 @@ def _get_chunk_documents_(documents :List[Document],
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, 
                                                    chunk_overlap=chunk_overlap,
-                                                   length_function=len,
-                                                   char_offset_add=char_offset_add)
+                                                   length_function=len)
 
     return text_splitter.split_documents(documents=documents)
 
@@ -69,15 +70,10 @@ def _build_vector_store_(chunked_docs :List[Document],
     Builds a vector store from the chunked documents using the specified embedding model.
     """
     _internal_embedding_model = True if embedding_model is None else False
-    
-    # get an instance 
-    emd = EmbeddedModelDecision(internal_embedding_model=_internal_embedding_model) if _internal_embedding_model else  EmbeddedModelDecision(internal_embedding_model=_internal_embedding_model, model_name=embedding_model)
-    
-    # get an embedding model instance
-    embedded_model = emd.get_auto_decided_embedding_model()
 
     # get an embedding method with a certain model
-    embed = Embeddings(embedding_model)
+    embed = Embeddings(internal_embedding_model=_internal_embedding_model,
+                       embedding_model= embedding_model)
     embedding_documents = embed.generate_embedding_documents(chunked_docs)
     
     

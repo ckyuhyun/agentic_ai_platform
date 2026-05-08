@@ -33,19 +33,19 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
 
 class EmbeddedModelDecision:
-    def __init__(self, 
-                 internal_embedding_model : bool = True,
-                 model_name : Optional[EmbeddingModel] = None):
+    def __init__(self, internal_embedding_model=None, model_name=None):
         load_dotenv()
 
+        self.internal_embedding_model = internal_embedding_model
+        self.model_name : Optional[EmbeddingModel] = model_name
         self.embeddings = None
         self.model = None
         self._embedding_method = None
 
-        if internal_embedding_model:
+        if self.internal_embedding_model:
             self.__oallama_embedding_mode__()
         else:
-            self.__init_embededing_library_model__(model_name or EmbeddingModel.BGE_BASE)
+            self.__init_embededing_library_model__(self.model_name or EmbeddingModel.BGE_BASE)
     
     def get_auto_decided_embedding_model(self):
          return self.embeddings
@@ -55,13 +55,13 @@ class EmbeddedModelDecision:
     
     
     def __oallama_embedding_mode__(self):      
-           method = "nomic-embed-text"
+           model = "nomic-embed-text:latest"
 
            self.embeddings = OllamaEmbeddings(
-                model=method,
+                model=model,
                 base_url=OLLAMA_BASE_URL
             )
-           self._embedding_method= method
+           self._embedding_method= model
 
 
     def __init_embededing_library_model__(self, 
