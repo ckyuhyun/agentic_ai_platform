@@ -166,11 +166,11 @@ class Embeddings(EmbeddedModelDecision):
 
     def _generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings in batch for better performance"""
-        if self.embedding_method == "huggingface":
+        if "huggingface" in self.embedding_method:
             return self.embeddings.embed_documents(texts)
-        elif self.embedding_method == "openai":
+        elif "openai" in self.embedding_method:
             return self.embeddings.embed_documents(texts)
-        elif self.embedding_method == "sentence_transformers":
+        elif "sentence_transformers" in self.embedding_method:
             embeddings = self.embeddings.encode(
                 texts,
                 batch_size=32,
@@ -178,7 +178,7 @@ class Embeddings(EmbeddedModelDecision):
                 convert_to_numpy=True
             )
             return embeddings.tolist()
-        elif self.embedding_method == "llama_index":
+        elif "llama_index" in self.embedding_method:
             return [self.embeddings.get_text_embedding(t) for t in texts]
         else:
             return [self._generate_embedding_text(t) for t in texts]
