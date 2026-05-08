@@ -80,13 +80,13 @@ class Embeddings(EmbeddedModelDecision):
     def generate_embedding_documents(self, 
                                      documents : List[Document]) -> List[Union[str]]:
         """Generate embedding vector for single text"""
-        if self.embedding_method == "huggingface":
+        if "huggingface" in self.embedding_method:
             return self.embeddings.embed_documents(documents)
-        elif self.embedding_method == "openai":
+        elif "openai" in self.embedding_method:
             return self.embeddings.embed_documents(documents)
-        elif self.embedding_method == "sentence_transformers":
+        elif "sentence_transformers" in self.embedding_method:
             return self.embeddings.encode(documents, convert_to_numpy=True).tolist()
-        elif self.embedding_method == "llama_index":
+        elif "llama_index" in self.embedding_method:
             return [self.embeddings.get_text_embedding(t) for t in documents]
         elif "nomic-embed-text" in self.embedding_method:
             # OLLAMA nomic-embed-text embedding mode (using OllamaEmbeddings interface)
