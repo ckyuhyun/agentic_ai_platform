@@ -26,13 +26,14 @@ import json
 #     return weaviate.Client(url=url, additional_headers=headers)
 
 class WeaviateDB:
-    def __init__(self):
+    def __init__(self,
+                 collection_name: str):
         self.api_endpoint = "http://ollama:11434"
-        self.collection_name = "Ollama_Models"
+        self.collection_name = collection_name
         self.__collection_init__()
 
     
-  
+    
             
     
     def update_query(
