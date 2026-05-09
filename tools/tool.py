@@ -3,7 +3,8 @@ from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 import json
 
-from agentic_ai_platform.rag.weaviate_controller import WeaviateController
+
+from agentic_ai_platform.db.weaviate_db import WeaviateDB
 
 
 _tavily = TavilySearch(max_results=5, topic="news", include_raw_content=False)
@@ -21,7 +22,7 @@ class Tools:
     @tool
     def search_rag(query: str) -> Union[None, str, list]:
         """Search the RAG system with the given query and return results."""
-        result = WeaviateController().search_query(query)
+        result = WeaviateDB().search_query(query)
         return None if not result else result
 
     @staticmethod

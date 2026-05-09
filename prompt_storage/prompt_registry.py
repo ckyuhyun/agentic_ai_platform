@@ -28,7 +28,7 @@ from __future__ import annotations
 import difflib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, get_args
 
 from langchain_core.messages import SystemMessage
 
@@ -37,10 +37,10 @@ from agentic_ai_platform.enum.prompt_type import PromptType
 
 
 @dataclass
-class PromptVersion:
+class SystemPromptVersion:
     prompt_type: PromptType
     version_id: str
-    prompt: str
+    system_prompt: str
     description: str               = ""
     created_at: datetime           = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime           = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -48,7 +48,7 @@ class PromptVersion:
 
     def as_messages(self) -> List[SystemMessage]:
         """Return as a LangChain message list ready to prepend to a prompt."""
-        return [SystemMessage(content=self.prompt)]
+        return [SystemMessage(content=self.system_prompt)]
 
     def __repr__(self) -> str:
         return (
@@ -59,20 +59,20 @@ class PromptVersion:
 
 class PromptRegistry:
     def __init__(self):
-        self.prompts_storage: Dict[str, List[PromptVersion]] = {}
+        self.prompts_storage: Dict[str, List[SystemPromptVersion]] = {}
 
     def register(self,
                  prompt_type: PromptType,
                  version_id: str,
-                 content: str,
+                 prompt: str,
                  description: str = "",
                  tags: Optional[List[str]]= []) -> None:
 
         try:
-            prompt_version = PromptVersion(
+            prompt_version = SystemPromptVersion(
                 prompt_type=prompt_type,
                 version_id=version_id,
-                prompt=content,
+                system_prompt=prompt,
                 description=description,
                 tags=tags,
             )
@@ -83,12 +83,16 @@ class PromptRegistry:
         
         
 
-    def get_prompts_by_type_version_tags(self,
+    def get_prompt_by_type_version_tags(self,
                     prompt_type: PromptType,
                     version_id: Optional[str] = None,
-                    tags: Optional[List[str]] = None) -> PromptVersion:
+                    tags: Optional[List[str]] = None) -> SystemPromptVersion:
 
         prompt_type_value = self.prompts_storage.get(prompt_type, {})
+
+        if not prompt_type in get_args(PromptType):
+            raise RuntimeError(f"Incorrect prompt type({prompt_type})")
+
 
         if version_id is not None:
             prompt_version_value = [d for d in prompt_type_value if d.version_id == version_id]
@@ -104,7 +108,7 @@ class PromptRegistry:
         #     for t in tags:
         #         prompts = [p for p in prompts if t in p.tags]
 
-        return prompt_version_value[0].prompt
+        return prompt_version_value[0]
     
  
     def update(self,
@@ -115,7 +119,7 @@ class PromptRegistry:
         
         try:
             if prompt_type in self.prompts_storage and version_id in self.prompts_storage[prompt_type]:
-                self.prompts_storage[prompt_type][version_id].prompt = content
+                self.prompts_storage[prompt_type][version_id].system_prompt = content
                 self.prompts_storage[prompt_type][version_id].description = description
                 self.prompts_storage[prompt_type][version_id].updated_at = datetime.now(timezone.utc)
             else:

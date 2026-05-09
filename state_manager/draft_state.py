@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
 from agentic_ai_platform.state_manager.hallucination_signal import HallucinationCheckerConfig
+from agentic_ai_platform.state_manager.plan_state import PlanState
 from agentic_ai_platform.state_manager.tool_state import ToolState
 
 
@@ -92,6 +93,8 @@ class DraftState(BaseModel):
 
     # LangGraph message history
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
+
+    plan : PlanState = Field(default_factory=PlanState, description="planning for execution")
 
     # Trace-based evaluation records
     node_traces: List[NodeTrace] = Field(default_factory=list, description="Per-node execution traces for evaluation")
