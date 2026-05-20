@@ -24,7 +24,8 @@ class NodeTrace(BaseModel):
 
     @staticmethod
     def start(node: str, iteration: int, model: str = "") -> "NodeTrace":
-        return NodeTrace(node=node, iteration=iteration, model=model)
+        return NodeTrace(node=node, iteration=iteration, model=model)    
+    
 
     def finish(self, **kwargs) -> "NodeTrace":
         self.latency_ms = (time.time() - self.started_at) * 1000
@@ -64,37 +65,50 @@ class DraftConfig(BaseModel):
     
 
 
-class DraftState(BaseModel):
+class SuperviseState(BaseModel):
     """State shared between the drafter and critic nodes."""
 
     # Task definition
-    task: Annotated[str, operator.add] = Field(description="The task or prompt the drafter must complete")
+    task: Annotated[str, operator.add] = Field(
+        description="The task or prompt the drafter must complete")
+    
     system_prompt: Optional[str] = Field(
         default=None,
         description="Optional system-level instruction to shape both drafter and critic behaviour"
     )
 
     # Drafter output
-    draft: Optional[Union[str,list]] = Field(default=None, description="Most recent draft produced by the drafter")
+    draft: Optional[Union[str,list]] = Field(
+        default=None, description="Most recent draft produced by the drafter")
 
     # Critic output
-    critique: Optional[CriticFeedback] = Field(default=None, description="Structured feedback from the critic")
+    critique: Optional[CriticFeedback] = Field(
+        default=None, description="Structured feedback from the critic")
 
     # Tool output history (if using tools)
-    tool_calls: list[ToolState] = Field(default_factory=list, description="History of tool calls made during drafting, if any")
+    tool_calls: list[ToolState] = Field(
+        default_factory=list, description="History of tool calls made during drafting, if any")
 
     # Loop control
-    drafter_config : DraftConfig = Field(default_factory=DraftConfig, description="Configuration for the drafting process")
-    iteration: int = Field(default=0, description="Number of draft/critique cycles completed")
+    graph_config : DraftConfig = Field(
+        default_factory=DraftConfig, description="Configuration for the drafting process")
+    
+    iteration: int = Field(
+        default=0, description="Number of draft/critique cycles completed")
     
 
     # Final result — set when critic approves or max_iterations reached
-    final_output: Optional[str] = Field(default=None, description="The accepted draft")
+    final_output: Optional[str] = Field(
+        default=None, description="The accepted draft")
 
     # LangGraph message history
-    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
+    messages: Annotated[list[AnyMessage], add_messages] = Field(
+        default_factory=list)
 
-    plan : PlanState = Field(default_factory=PlanState, description="planning for execution")
+    # planner state
+    plan : PlanState = Field(
+        default_factory=PlanState, description="planning for execution")
 
     # Trace-based evaluation records
-    node_traces: List[NodeTrace] = Field(default_factory=list, description="Per-node execution traces for evaluation")
+    node_traces: List[NodeTrace] = Field(
+        default_factory=list, description="Per-node execution traces for evaluation")

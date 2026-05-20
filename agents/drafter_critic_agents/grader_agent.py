@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from langchain_core.tools import BaseTool
 from langchain_core.messages import HumanMessage
 
-from agentic_ai_platform.state_manager.draft_state import DraftState, NodeTrace
+from agentic_ai_platform.state_manager.draft_state import SuperviseState, NodeTrace
 from agentic_ai_platform.tools.grader_tools import EvalsTools
 
 
@@ -48,7 +48,7 @@ def create_grader_agent(
 
     #structured_model = graph_llm.with_structured_output(schema)
 
-    def grader_node(state: DraftState):
+    def grader_node(state: SuperviseState):
 
         # start updating trace
         trace = NodeTrace.start(node="grader", iteration=state.iteration, model="llama3.1")
@@ -100,7 +100,7 @@ def run_eval_tools():
     pass 
 
 
-def _run_eval_tools(tool_map: dict, state: DraftState) -> dict[str, str]:
+def _run_eval_tools(tool_map: dict, state: SuperviseState) -> dict[str, str]:
     """Invoke every tool in tool_map and return {tool_name: report}."""
     reports = {}
     try:
@@ -115,7 +115,7 @@ def _run_eval_tools(tool_map: dict, state: DraftState) -> dict[str, str]:
     return reports
 
 
-def _build_tool_input(tool: BaseTool, state: DraftState) -> dict:
+def _build_tool_input(tool: BaseTool, state: SuperviseState) -> dict:
     """Return the correct input dict for a given grader tool."""
     key = _TOOL_INPUT.get(tool.name, "draft")
     if key == "content":
@@ -123,11 +123,11 @@ def _build_tool_input(tool: BaseTool, state: DraftState) -> dict:
     return {"draft": state.draft or ""}
 
 
-def _build_eval_message(state: DraftState, tool_reports: dict[str, str]) -> str:
+def _build_eval_message(state: SuperviseState, tool_reports: dict[str, str]) -> str:
     base = (
         f"Original task:\n{state.task}\n\n"
         f"Draft to evaluate:\n{state.draft}\n\n"
-        f"Approval threshold: {state.drafter_config.approval_threshold}"
+        f"Approval threshold: {state.graph_config.approval_threshold}"
     )
     if not tool_reports:
         return base

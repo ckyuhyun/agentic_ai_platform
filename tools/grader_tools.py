@@ -1,7 +1,7 @@
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from agentic_ai_platform.eval.safety.hallucination_safeguide import HallucinationSignal
-from agentic_ai_platform.state_manager.draft_state import DraftState
+from agentic_ai_platform.state_manager.draft_state import SuperviseState
 from agentic_ai_platform.llm.llm import LLM
 from agentic_ai_platform.eval.safety.hallucination_safeguide import HallucinationsJudge
 from typing_extensions import Annotated
@@ -31,7 +31,7 @@ class EvalsTools:
 
     @staticmethod 
     @tool
-    def check_hallucinations(draft:str, state:Annotated[DraftState, InjectedState]):        
+    def check_hallucinations(draft:str, state:Annotated[SuperviseState, InjectedState]):        
         """
         Check the draft for potential hallucinations, which are pieces of information that may be fabricated, inaccurate, or not supported by evidence.
         """

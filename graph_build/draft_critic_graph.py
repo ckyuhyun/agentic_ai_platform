@@ -3,7 +3,7 @@ from langgraph.types import interrupt
 from langgraph.prebuilt import ToolNode
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
-from agentic_ai_platform.state_manager.draft_state import DraftConfig, DraftState
+from agentic_ai_platform.state_manager.draft_state import DraftConfig, SuperviseState
 from agentic_ai_platform.agents.self_collection_agents.planner_agent import create_planner_agent
 from agentic_ai_platform.agents.drafter_critic_agents.drafter_agent import create_drafter_agent
 from agentic_ai_platform.agents.drafter_critic_agents.grader_agent import create_grader_agent
@@ -18,10 +18,10 @@ from agentic_ai_platform import prompt_hub
 
 
 
-def route(state: DraftState) -> str:
+def route(state: SuperviseState) -> str:
     if state.messages[-1].tool_calls[0]['name'] == "check_hallucinations":
         return "hallucination_check"
-    elif state.iteration >= state.drafter_config.max_iterations:
+    elif state.iteration >= state.graph_config.max_iterations:
          return "human_review"
     elif state.critique and state.critique.approved:
         return "end"
@@ -34,7 +34,7 @@ def route(state: DraftState) -> str:
     #     return "human_review"
     # return "drafter"
 
-def human_review_node(state: DraftState) -> DraftState:
+def human_review_node(state: SuperviseState) -> SuperviseState:
     print("\n── Human Review Required ─────────────────────────")
     print(f"Task: {state.task}")
     print(f"Draft: {state.draft}")
@@ -62,19 +62,23 @@ def human_review_node(state: DraftState) -> DraftState:
     
 
 def build_drafter_critic_graph():
-
-    plan_system_prompt = prompt_hub.get_prompt_by_type_version_tags("planner", "0").as_messages()
+    """
+    Build graph
+    """
+    plan_system_prompt = prompt_hub.get_prompt_by_type_version_tags(prompt_type="planner", 
+                                                                    version_id="0").as_messages()
     plan_agent = create_planner_agent(schema=PlanState,
                                       system_prompt=plan_system_prompt,
                                       graph_llm=LLM("llama3.1").llm_instance)
 
-    drafter_agent = create_drafter_agent(DraftState,
+    drafter_agent = create_drafter_agent(SuperviseState,
                                         tool_llm=LLM("llama3.1").llm_instance,
                                          graph_llm=LLM("llama3.1").llm_instance,
                                          tools=[Tools.search_rag, Tools.search_web])
     
     
-    critic_prompt = prompt_hub.get_prompt_by_type_version_tags("critic", "0").as_messages()
+    critic_prompt = prompt_hub.get_prompt_by_type_version_tags(prompt_type="critic", 
+                                                               version_id="0").as_messages()
     critic_agent = create_grader_agent(CriticFeedback,
                                       system_prompt=critic_prompt,
                                       eval_tools=[EvalsTools.check_hallucinations],
@@ -84,7 +88,7 @@ def build_drafter_critic_graph():
     eval_tools = [EvalsTools.check_hallucinations]
     tools = ToolNode(eval_tools)
 
-    graph = StateGraph(DraftState)
+    graph = StateGraph(SuperviseState)
 
     graph.add_node("plan", plan_agent)
     graph.add_node("drafter", drafter_agent)

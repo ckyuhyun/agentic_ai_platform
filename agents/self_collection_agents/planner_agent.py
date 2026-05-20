@@ -36,8 +36,6 @@ def create_planner_agent(
         structed_model = graph_llm.with_structured_output(schema)
         output : PlanState = structed_model.invoke(final_prompt)
 
-        
-
         return {'messages' : [output]}
         
 
