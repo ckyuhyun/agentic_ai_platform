@@ -14,7 +14,7 @@ def create_planner_agent(
 ):
     """
     Factory that returns a planner node bound to the given Pydantic schema.
-
+ 
     schema must have: plan (str), reasoning (str), next_steps (list[str]).
     """
 

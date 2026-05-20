@@ -1,4 +1,5 @@
 from langsmith import Client
+from collections import deque
 
 from agentic_ai_platform.state_manager.draft_state import NodeTrace
 
@@ -21,3 +22,14 @@ def post_trace(run_name : str,  node_trace : NodeTrace):
                 "issue_count": trace.issue_count,
             }
         )
+
+def __trace_queue__(node_trace):
+    pass
+    
+
+
+
+def __create_queue_instance__():
+    return deque()
+
+

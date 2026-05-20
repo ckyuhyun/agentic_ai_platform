@@ -50,8 +50,8 @@ class GraphBuild:
         except ValueError as e:
             RuntimeError(f"Error during graph execution: {str(e)}")
 
-        #if LANGSMITH_AVAILABLE:
-        #   self._post_traces_to_langsmith()
+        if LANGSMITH_AVAILABLE:
+           self._post_traces_to_langsmith()
 
         
 
