@@ -79,23 +79,31 @@ class Embeddings(EmbeddedModelDecision):
 
     def generate_embedding_documents(self, 
                                      documents : List[Document]) -> List[Union[str]]:
-        """Generate embedding vector for single text"""
-        if "huggingface" in self.embedding_method:
-            return self.embeddings.embed_documents(documents)
-        elif "openai" in self.embedding_method:
-            return self.embeddings.embed_documents(documents)
-        elif "sentence_transformers" in self.embedding_method:
-            return self.embeddings.encode(documents, convert_to_numpy=True).tolist()
-        elif "llama_index" in self.embedding_method:
-            return [self.embeddings.get_text_embedding(t) for t in documents]
-        elif "nomic-embed-text" in self.embedding_method:
-            # OLLAMA nomic-embed-text embedding mode (using OllamaEmbeddings interface)
-            page_contents = [doc.page_content for doc in documents]
-            return self.embeddings.embed_documents(page_contents)
-        else:
-            # Hash-based fallback
-            vector_size = EMBEDDING_DIMENSIONS.get(self.embedding_model_name, 384)
-            return [[((b - 128) / 128.0) for b in hashlib.sha256(t.encode()).digest()[:vector_size]] for t in documents]
+        try:
+            """Generate embedding vector for single text"""
+            if "huggingface" in self.embedding_method:
+                return self.embeddings.embed_documents(documents)
+            elif "openai" in self.embedding_method:
+                return self.embeddings.embed_documents(documents)
+            elif "sentence_transformers" in self.embedding_method:
+                return self.embeddings.encode(documents, convert_to_numpy=True).tolist()
+            elif "llama_index" in self.embedding_method:
+                return [self.embeddings.get_text_embedding(t) for t in documents]
+            elif "nomic-embed-text" in self.embedding_method:
+                # OLLAMA nomic-embed-text embedding mode (using OllamaEmbeddings interface)
+                page_contents = [doc.page_content for doc in documents]
+                return self.embeddings.embed_documents(page_contents)
+            else:
+                # Hash-based fallback
+                vector_size = EMBEDDING_DIMENSIONS.get(self.embedding_model_name, 384)
+                return [[((b - 128) / 128.0) for b in hashlib.sha256(t.encode()).digest()[:vector_size]] for t in documents]
+        except Exception as e:
+            logs = f"Error generating embeddings for documents: {e}" + \
+                   f"\nEmbedding method: {self.embedding_method}" + \
+                   f"\nEmbedding model: {self.embedding_model_name}"
+            
+            raise ValueError(logs)
+            
 
 
     def generate_embedding_text(self, 
@@ -106,7 +114,7 @@ class Embeddings(EmbeddedModelDecision):
         try:
             doc = self._create_documents_([text])
         except Exception as e:
-            print(f"⚠ Error creating documents for embedding: {e}")
+            print(f"Error creating documents for embedding: {e}")
             raise ValueError(f"{e}")
 
         _doc = [cont for cont in doc]

@@ -89,6 +89,6 @@ class WeaviateDB:
                 if not client.collections.exists(self.collection_name):                    
                     client.collections.create(
                         self.collection_name,
-                        #vector_config=Configure.Vectors.text2vec_ollama()
+                        vector_config=Configure.Vectors.text2vec_ollama()
                     )            
         

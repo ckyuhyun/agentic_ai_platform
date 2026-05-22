@@ -29,12 +29,12 @@ except ImportError:
     LLAMA_INDEX_AVAILABLE = False
 
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
 
 class EmbeddedModelDecision:
     def __init__(self, internal_embedding_model=None, model_name=None):
         load_dotenv()
+        self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
         self.internal_embedding_model = internal_embedding_model
         self.model_name : Optional[EmbeddingModel] = model_name
@@ -59,7 +59,7 @@ class EmbeddedModelDecision:
 
            self.embeddings = OllamaEmbeddings(
                 model=model,
-                base_url=OLLAMA_BASE_URL
+                base_url=self.OLLAMA_BASE_URL
             )
            self._embedding_method= model
 

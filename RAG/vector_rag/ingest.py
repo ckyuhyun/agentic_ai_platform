@@ -3,7 +3,7 @@ import os
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader, 
-    WordDocumentLoader, 
+
     DirectoryLoader)
 
 
@@ -70,8 +70,9 @@ class Ingest:
             return False, f"Error loading vector store from text: {str(e)}"
 
 
-    def _load_documents_from_directory_(directory_path:str, 
-                                    file_type: Literal["pdf", "txt", "docx"]) -> List[Document]:
+    def _load_documents_from_directory_(self,
+                                        directory_path:str, 
+                                        file_type: Literal["pdf", "txt", "docx"]) -> List[Document]:
         """
         Loads documents from a specified directory based on the file type.
         """
