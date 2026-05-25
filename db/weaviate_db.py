@@ -1,8 +1,13 @@
 from typing import Optional, List, Dict, Union
 import weaviate
+import weaviate.classes.config as wvc
+from langchain_weaviate.vectorstores import WeaviateVectorStore
+
 
 from weaviate.classes.config import Configure 
 import json
+import logging
+import sys
 
 
 # /c:/Users/c_kyu/Development/PersonalProject/rag_project/db/weaviate.py
@@ -27,28 +32,111 @@ import json
 
 class WeaviateDB:
     def __init__(self,
-                 collection_name: str):
+                 collection_name: str,
+                 embedded_model):
         self.api_endpoint = "http://ollama:11434"
         self.collection_name = collection_name
+        self.embedded_model = embedded_model
         self.__collection_init__()
-
-    
-    
             
     
     def update_query(
         self,
-        data_objects: Union[List[Dict], Dict] = None) -> None:
-        with weaviate.connect_to_local() as client:
-            collection_object =  client.collections.use(self.collection_name)
+        text_documents : Union[List[Dict], Dict],
+        batch_size : Union[int, None] = None,
+        
+        #emb_objects: Union[List[Dict], Dict] = None) -> None:
+         ) -> None:
+        """
+        Updates the collection with new data objects. Can be done in batches or all at once.
+        - batch_size: if provided, data will be added in batches of this size; otherwise, all data will be batched dynamically.
+        - emb_objects: a single dict or a list of dicts representing the objects to add to the collection. 
+                        Each dict should contain the properties of the object to be added.  
+        """        
 
-            if data_objects:
-                with collection_object.batch.fixed_size(batch_size=200) as batch:    
-                    if isinstance(data_objects, list):
-                        for obj in data_objects:
-                            batch.add_object(properties=obj)
-                    elif isinstance(data_objects, dict):
-                        batch.add_object(properties=data_objects)
+      
+                    
+
+        with weaviate.connect_to_local() as client: 
+
+            if not client.collections.exists(self.collection_name):
+                client.collections.create(
+                    name=self.collection_name,
+                    description=f"Collection for {self.collection_name}",
+                    
+                    properties=[
+                        {
+                            "name": "text",
+                            "dataType": wvc.DataType.text,
+                            "description": "The text content of the document"
+                        },
+                        {
+                            "name": "metadata",
+                            "dataType": wvc.DataType.text,
+                            "description": "Metadata associated with the document"
+                        }
+
+                    ]
+
+                )
+            collection_object =  client.collections.get(self.collection_name)
+
+            # weaviate_vector_logger = logging.getLogger("langchain_weaviate.vectorstores")
+
+            # # set its level to DEBUG 
+            # weaviate_vector_logger.setLevel(logging.DEBUG)
+
+            # handler = logging.StreamHandler(sys.stdout)
+            # handler.setLevel(logging.DEBUG)
+            # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            # handler.setFormatter(formatter)
+
+            # weaviate_vector_logger.addHandler(handler)
+            # weaviate_vector_logger.propagate = False
+
+            db = WeaviateVectorStore(client, 
+                                     index_name=self.collection_name,
+                                     text_key="text",
+                                     embedding=self.embedded_model)
+            try:
+                result = db.add_documents(documents=text_documents)
+            except Exception as e:
+                raise Exception(f"Error adding documents to Weaviate: {str(e)}")
+            # try:
+            #     if text_documents:
+            #         #create a new uuid
+            #         object_uuid = str(uuid.uuid4())
+
+            #         if batch_size:
+            #             with collection_object.batch.fixed_size(batch_size=batch_size) as batch:                                
+            #                 if isinstance(text_documents, list):
+            #                     for obj in text_documents:
+            #                         # ensure each object has a uuid
+            #                         if isinstance(obj, dict):
+            #                             obj.setdefault("uuid", object_uuid)
+
+            #                         batch.add_object(properties=obj,
+            #                                          uuid=object_uuid)
+            #                 elif isinstance(text_documents, dict):
+            #                     text_documents.setdefault("uuid", object_uuid)
+            #                     batch.add_object(properties=text_documents,
+            #                                      uuid=object_uuid)
+            #         else:
+            #             with collection_object.batch.dynamic() as batch:    
+            #                 if isinstance(text_documents, list):
+            #                     for obj in text_documents:
+            #                         if isinstance(obj, dict):
+            #                             obj.setdefault("uuid", object_uuid)
+            #                         batch.add_object(properties=obj,
+            #                                          uuid=object_uuid)
+                                    
+            #                 elif isinstance(text_documents, dict):
+            #                     text_documents.setdefault("uuid", object_uuid)
+            #                     batch.add_object(properties=text_documents,
+            #                                      uuid=object_uuid)
+            except Exception as e:
+                raise Exception(f"Error updating collection: {str(e)}")
+            
 
     def read_data(self) -> None:
         with weaviate.connect_to_local() as client:

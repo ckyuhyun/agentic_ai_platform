@@ -1,4 +1,4 @@
-from agentic_ai_platform.rag.embedding import Embeddings
+from agentic_ai_platform.RAG.embedding import Embeddings
 
 class InboundQuery:
     def __init__(self, 

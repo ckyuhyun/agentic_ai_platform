@@ -1,13 +1,17 @@
 import os
 
+
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader, 
-
+    UnstructuredFileLoader,
     DirectoryLoader)
 
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import (
+    RecursiveCharacterTextSplitter,
+    CharacterTextSplitter
+)
 from langchain_core.documents import Document
 
 
@@ -16,17 +20,23 @@ from typing import List, Literal, Optional, Union
 
 from agentic_ai_platform.db.weaviate_db import WeaviateDB
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
-from agentic_ai_platform.rag.embedding import Embeddings
-from agentic_ai_platform.rag.embedded_model_list import EmbeddingModel
+from agentic_ai_platform.RAG.embedding import Embeddings
+from agentic_ai_platform.RAG.embedded_model_list import EmbeddingModel
 
 
 class Ingest:
 
     def __init__(self,
                  vector_db_type : Literal["weaviate"],
-                 vector_db_collection_name: str):
-        self .vector_db_type = vector_db_type
+                 vector_db_collection_name: str,
+                 chunk_size : int =1, # defautlt is 1 which means forcing strict splitting at the separator
+                 chunk_overlap : int=0):
+        self.vector_db_type = vector_db_type
         self.vector_db_collection_name = vector_db_collection_name
+        self.document_loader_split_enable : bool = True
+        self.text_splitter = CharacterTextSplitter(separator=["\n\n", "\n", " ", ""],                                            
+                                                   chunk_size=chunk_size,
+                                                   chunk_overlap=chunk_overlap)
 
 
 
@@ -78,31 +88,48 @@ class Ingest:
         """
         loaders = DirectoryLoader(path=directory_path, 
                                 glob=f"**/*.{file_type}", 
-                                show_progress=True)
-        
-        docs = []
+                                loader_cls=UnstructuredFileLoader,
+                                loader_kwargs= {"mode": "elements", 
+                                                "include_metadata": True,
+                                                "coordinates": False,
+                                                "unstructured_kwargs": {"strategy": "fast"}} if self.document_loader_split_enable else None
+                                )
 
-        for loader in loaders.load():
-            docs.append(loader)
-        
-
-        return docs
+        load_doc =  loaders.load()
+        return load_doc
 
 
     def _get_chunk_documents_(self,
-                              documents :List[Document], 
-                              chunk_size : int =20, 
-                              chunk_overlap : int=5,
-                              char_offset_add : bool =True) -> List[Document]:
+                              documents :List[Document]) -> List[Document]:
         """
         Chunks the documents into smaller pieces using RecursiveCharacterTextSplitter.
         """    
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, 
-                                                    chunk_overlap=chunk_overlap,
-                                                    length_function=len)
+        # text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, 
+        #                                             chunk_overlap=chunk_overlap,
+        #                                             length_function=len)
 
-        return text_splitter.split_documents(documents=documents)
+        # if the document loader already splits the document, we can skip the splitting process
+        if self.document_loader_split_enable:
+            return documents
+        
+        split_docs = None
+        try:
+            split_docs = self._get_splitted_document_(documents)
+        except Exception as e:
+            raise Exception(f"Error splitting documents: {str(e)}")
+
+        
+        return split_docs
+
+    def _get_splitted_document_(self, 
+                              document :Document) -> List[Document]:
+        
+        try:
+            #doc = document[0] if isinstance(document, tuple) else document
+            return self.text_splitter.split_documents(document) if isinstance(document, Document) else self.text_splitter.split_documents(document[0])
+        except Exception as e:
+            raise Exception("Error splitting document: " + str(e))   
 
 
     def _build_vector_store_(self, 
@@ -115,23 +142,27 @@ class Ingest:
 
         # get an embedding method with a certain model
         embed = Embeddings(internal_embedding_model=_internal_embedding_model,
-                        embedding_model= embedding_model)
+                           embedding_model= embedding_model)
         embedding_documents = embed.generate_embedding_documents(chunked_docs)
         
         
         if self.vector_db_type == "weaviate":
-            self._build_vector_with_weaviate(embedding_documents)
+            self._build_vector_with_weaviate(documents=chunked_docs, 
+                                             embedded_model=embed.get_auto_decided_embedding_model())
         else:
             raise ValueError(f"Unsupported vector_db_type: {self.vector_db_type}")
         
 
     def _build_vector_with_weaviate(self,
-                                    embedding_documents :List[Document]):
+                                    documents : Union[List[dict], dict],
+                                    embedded_model,
+                                    embedding_documents :List[Document] = None):
         """
         Builds a vector store in Weaviate from the embedding documents.
         """
-        weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name)
-        weaviate_db.update_query(embedding_documents)
+        weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name,
+                                 embedded_model=embedded_model)
+        weaviate_db.update_query(text_documents=documents)
     
 
     
