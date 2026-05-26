@@ -94,8 +94,12 @@ class Ingest:
                                                 "coordinates": False,
                                                 "unstructured_kwargs": {"strategy": "fast"}} if self.document_loader_split_enable else None
                                 )
+        
+        
 
         load_doc =  loaders.load()
+
+        for doc in load_doc : doc.metadata.pop("coordinates", None) # remove coordinates from metadata if exists since we are not using it for vector search
         return load_doc
 
 

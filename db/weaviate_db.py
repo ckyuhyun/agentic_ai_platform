@@ -55,30 +55,53 @@ class WeaviateDB:
         """        
 
       
-                    
+        with weaviate.connect_to_local() as client:              
+            try:
+                if client.collections.exists(self.collection_name):
+                    client.collections.delete(self.collection_name)
+            except Exception as e:
+                raise Exception(f"Error deleting existing collection: {str(e)}")
 
         with weaviate.connect_to_local() as client: 
 
             if not client.collections.exists(self.collection_name):
-                client.collections.create(
-                    name=self.collection_name,
-                    description=f"Collection for {self.collection_name}",
-                    
-                    properties=[
-                        {
-                            "name": "text",
-                            "dataType": wvc.DataType.text,
-                            "description": "The text content of the document"
-                        },
-                        {
-                            "name": "metadata",
-                            "dataType": wvc.DataType.text,
-                            "description": "Metadata associated with the document"
-                        }
+                try:
+                    client.collections.create(
+                        name=self.collection_name,
+                        description=f"Collection for {self.collection_name}",
+                        
+                        properties=[
+                            wvc.Property(
+                                name="page_content",
+                                data_type=wvc.DataType.TEXT,
+                                description="The text content of the document"
+                            ),
+                            wvc.Property(
+                                name="coordinates",
+                                data_type=wvc.DataType.TEXT, 
+                                index_filterable=False,
+                                index_searchable=False,
+                                description="Raw layout metadata ignored by vector search indices"
+                            ),
+                #             wvc.Property(
+                #                 name="points",
+                #                 data_type=wvc.DataType.TEXT, 
+                # #                index_filterable=False,
+                #  #               index_searchable=False,
+                #                 description="Raw layout metadata ignored by vector search indices"
+                #             ),
+                            # wvc.Property(
+                            #     name="metadata",
+                            #     data_type=wvc.DataType.TEXT,
+                            #     description="Metadata associated with the document"
+                            # )
 
-                    ]
+                        ]
 
-                )
+                    )
+                except Exception as e:
+                    raise Exception(f"Error creating collection: {str(e)}")
+                
             collection_object =  client.collections.get(self.collection_name)
 
             # weaviate_vector_logger = logging.getLogger("langchain_weaviate.vectorstores")
