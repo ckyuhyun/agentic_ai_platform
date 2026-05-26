@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langchain.chat_models import init_chat_model
 
-from agentic_ai_platform.graph.embedded_model_decision import OLLAMA_BASE_URL
+
 
 
 

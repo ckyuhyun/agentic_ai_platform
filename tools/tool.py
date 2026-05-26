@@ -13,13 +13,6 @@ _tavily = TavilySearch(max_results=5, topic="news", include_raw_content=False)
 class Tools:
     @staticmethod
     @tool
-    def tool_a():
-        """Example tool A"""
-        print("Executing Tool A")
-        return "Result from Tool A"
-
-    @staticmethod
-    @tool
     def search_rag(query: str) -> Union[None, str, list]:
         """Search the RAG system with the given query and return results."""
         result = WeaviateDB().search_query(query)
