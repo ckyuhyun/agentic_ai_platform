@@ -6,7 +6,7 @@ import weaviate.classes.config as wvc
 from langchain_weaviate.vectorstores import WeaviateVectorStore
 
 
-from weaviate.classes.config import Configure 
+from weaviate.classes.config import Configure, VectorDistances 
 import json
 import logging
 import sys
@@ -107,7 +107,7 @@ class WeaviateDB:
 
                         ],
                         vector_index_config=Configure.VectorIndex.hnsw(
-                            distance_metric=wvc.Configure.Vectors.Distance.COSINE,
+                            distance_metric=VectorDistances.COSINE,
                             ef_construction=128, # Build-time accuracy (higher = better, slower)
                             max_connections=64, # Graph connectivity
                             ef=64 # Query-time accuracy
