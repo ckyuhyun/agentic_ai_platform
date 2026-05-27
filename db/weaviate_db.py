@@ -137,7 +137,10 @@ class WeaviateDB:
                                      text_key="text",
                                      embedding=self.embedded_model)
             try:
+                print(f"was trying to add {len(text_documents)} documents.")
                 result = db.add_documents(documents=text_documents)
+                print(f"Added {len(result)} documents.")
+
             except Exception as e:
                 raise Exception(f"Error adding documents to Weaviate: {str(e)}")
             # try:
