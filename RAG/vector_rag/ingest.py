@@ -147,7 +147,7 @@ class Ingest:
         # get an embedding method with a certain model
         embed = Embeddings(internal_embedding_model=_internal_embedding_model,
                            embedding_model= embedding_model)
-        embedding_documents = embed.generate_embedding_documents(chunked_docs)
+        #embedding_documents = embed.generate_embedding_documents(chunked_docs)
         
         
         if self.vector_db_type == "weaviate":

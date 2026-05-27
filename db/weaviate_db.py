@@ -1,4 +1,6 @@
+import os
 from typing import Optional, List, Dict, Union
+from dotenv import load_dotenv
 import weaviate
 import weaviate.classes.config as wvc
 from langchain_weaviate.vectorstores import WeaviateVectorStore
@@ -34,8 +36,13 @@ class WeaviateDB:
     def __init__(self,
                  collection_name: str,
                  embedded_model):
-        self.api_endpoint = "http://ollama:11434"
+        
+        load_dotenv()
+
+
         self.collection_name = collection_name
+        self.api_endpoint_host = os.getenv("WEAVIATE_HOST")
+        self.api_endpoint_port = os.getenv("WEAVIATE_PORT")
         self.embedded_model = embedded_model
         self.__collection_init__()
             
@@ -55,14 +62,16 @@ class WeaviateDB:
         """        
 
       
-        with weaviate.connect_to_local() as client:              
+        with weaviate.connect_to_local(host=self.api_endpoint_host, 
+                                       port=self.api_endpoint_port) as client:              
             try:
                 if client.collections.exists(self.collection_name):
                     client.collections.delete(self.collection_name)
             except Exception as e:
                 raise Exception(f"Error deleting existing collection: {str(e)}")
 
-        with weaviate.connect_to_local() as client: 
+        with weaviate.connect_to_local(host=self.api_endpoint_host, 
+                                       port=self.api_endpoint_port) as client: 
 
             if not client.collections.exists(self.collection_name):
                 try:
@@ -76,13 +85,13 @@ class WeaviateDB:
                                 data_type=wvc.DataType.TEXT,
                                 description="The text content of the document"
                             ),
-                            wvc.Property(
-                                name="coordinates",
-                                data_type=wvc.DataType.TEXT, 
-                                index_filterable=False,
-                                index_searchable=False,
-                                description="Raw layout metadata ignored by vector search indices"
-                            ),
+                            # wvc.Property(
+                            #     name="coordinates",
+                            #     data_type=wvc.DataType.TEXT, 
+                            #     index_filterable=False,
+                            #     index_searchable=False,
+                            #     description="Raw layout metadata ignored by vector search indices"
+                            # ),
                 #             wvc.Property(
                 #                 name="points",
                 #                 data_type=wvc.DataType.TEXT, 
@@ -162,7 +171,8 @@ class WeaviateDB:
             
 
     def read_data(self) -> None:
-        with weaviate.connect_to_local() as client:
+        with weaviate.connect_to_local(host=self.api_endpoint_host, 
+                                       port=self.api_endpoint_port) as client:
             if client.collections.exists(self.collection_name):
                 collection_object =  client.collections.use(self.collection_name)
                 for item in collection_object.iterator():
@@ -175,7 +185,8 @@ class WeaviateDB:
             query_text: str,
             limit: int = 5) -> Union[List[Dict], Dict, None]:
         
-        with weaviate.connect_to_local() as client:
+        with weaviate.connect_to_local(host=self.api_endpoint_host, 
+                                       port=self.api_endpoint_port) as client:
             search_results = []
             if client.collections.exists(self.collection_name):
                 collection_object =  client.collections.use(self.collection_name)
@@ -192,14 +203,19 @@ class WeaviateDB:
             return None
     
     def delete_collection(self):
-        with weaviate.connect_to_local() as client:
+        with weaviate.connect_to_local(host=self.api_endpoint_host, 
+                                       port=self.api_endpoint_port) as client:
             client.collections.delete(self.collection_name)
 
     def __collection_init__(self):
-            with weaviate.connect_to_local() as client:
-                if not client.collections.exists(self.collection_name):                    
-                    client.collections.create(
-                        self.collection_name,
-                        vector_config=Configure.Vectors.text2vec_ollama()
-                    )            
+            with weaviate.connect_to_local(host=self.api_endpoint_host, 
+                                           port=self.api_endpoint_port) as client:
+                try:
+                    if not client.collections.exists(self.collection_name):                    
+                        client.collections.create(
+                            self.collection_name,
+                            vector_config=Configure.Vectors.text2vec_ollama()
+                        )            
+                except Exception as e: 
+                    raise Exception(f"Error initializing collection: {str(e)}")
         
