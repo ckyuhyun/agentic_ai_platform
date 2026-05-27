@@ -105,7 +105,13 @@ class WeaviateDB:
                             #     description="Metadata associated with the document"
                             # )
 
-                        ]
+                        ],
+                        vector_index_config=Configure.VectorIndex.hnsw(
+                            distance_metric=wvc.Configure.Vectors.Distance.COSINE,
+                            ef_construction=128, # Build-time accuracy (higher = better, slower)
+                            max_connections=64, # Graph connectivity
+                            ef=64 # Query-time accuracy
+                        )
 
                     )
                 except Exception as e:
