@@ -132,10 +132,8 @@ class WeaviateDB:
             # weaviate_vector_logger.addHandler(handler)
             # weaviate_vector_logger.propagate = False
 
-            db = WeaviateVectorStore(client, 
-                                     index_name=self.collection_name,
-                                     text_key="text",
-                                     embedding=self.embedded_model)
+            db = self.__get_weaviate_db__(client)
+
             try:
                 print(f"was trying to add {len(text_documents)} documents.")
                 result = db.add_documents(documents=text_documents)
@@ -188,27 +186,17 @@ class WeaviateDB:
                     print("---")
                     print(f"item: {item}")
 
-                    
+        
     def search_query(
             self,
-            query_text: str,
-            limit: int = 5) -> Union[List[Dict], Dict, None]:
-        
-        with weaviate.connect_to_local(host=self.api_endpoint_host, 
+            query: str,
+            top_k: int = 5) -> Union[List[Dict], None]:
+
+        with weaviate.connect_to_local(host=self.api_endpoint_host,
                                        port=self.api_endpoint_port) as client:
-            search_results = []
             if client.collections.exists(self.collection_name):
-                collection_object =  client.collections.use(self.collection_name)
-                # result = collection_object.query.near_text(
-                #     query=query_text,
-                #     limit=limit
-                # )
-                result = collection_object.query.fetch_objects()
-                for obj in result.objects:
-                    search_results.append(obj.properties)
-                    print(json.dumps(obj.properties, indent=2))  # Inspect the results
-                
-                return search_results
+                db = self.__get_weaviate_db__(client)
+                return db.similarity_search(query, k=top_k)
             return None
     
     def delete_collection(self):
@@ -227,4 +215,11 @@ class WeaviateDB:
                         )            
                 except Exception as e: 
                     raise Exception(f"Error initializing collection: {str(e)}")
+                
+    def __get_weaviate_db__(self,
+                         client):
+        return WeaviateVectorStore(client,
+                                         index_name=self.collection_name,
+                                         text_key="text",
+                                         embedding=self.embedded_model)      
         

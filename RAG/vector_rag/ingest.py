@@ -8,10 +8,7 @@ from langchain_community.document_loaders import (
     DirectoryLoader)
 
 
-from langchain_text_splitters import (
-    RecursiveCharacterTextSplitter,
-    CharacterTextSplitter
-)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 
@@ -29,14 +26,14 @@ class Ingest:
     def __init__(self,
                  vector_db_type : Literal["weaviate"],
                  vector_db_collection_name: str,
-                 chunk_size : int =1, # defautlt is 1 which means forcing strict splitting at the separator
-                 chunk_overlap : int=0):
+                 chunk_size : int = 800,
+                 chunk_overlap : int = 100):
         self.vector_db_type = vector_db_type
         self.vector_db_collection_name = vector_db_collection_name
-        self.document_loader_split_enable : bool = True
-        self.text_splitter = CharacterTextSplitter(separator=["\n\n", "\n", " ", ""],                                            
-                                                   chunk_size=chunk_size,
-                                                   chunk_overlap=chunk_overlap)
+        self.document_loader_split_enable : bool = False
+        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size,
+                                                            chunk_overlap=chunk_overlap,
+                                                            length_function=len)
 
 
 
@@ -78,6 +75,28 @@ class Ingest:
             return True, "Vector store loaded successfully from directory."
         except Exception as e:
             return False, f"Error loading vector store from text: {str(e)}"
+
+    def querying(self,  
+                 query: str, 
+                 top_k: int = 5) -> List[str]:
+        """
+        Queries the vector store with a given query and returns the results.
+        """
+        try:
+            if self.vector_db_type == "weaviate":
+                embed = Embeddings(internal_embedding_model=True,
+                    embedding_model= None)
+                        
+                weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name, 
+                                         embedded_model=embed.get_auto_decided_embedding_model())
+                
+                results = weaviate_db.search_query(query=query, 
+                                                   top_k=top_k)
+                return results
+            else:
+                raise ValueError(f"Unsupported vector_db_type: {self.vector_db_type}")
+        except Exception as e:
+            return False, f"Error querying vector store: {str(e)}"
 
 
     def _load_documents_from_directory_(self,
