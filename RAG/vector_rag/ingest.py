@@ -1,19 +1,13 @@
 import os
-
+from typing import List, Literal, Optional, Union
 
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader, 
     UnstructuredFileLoader,
     DirectoryLoader)
-
-
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-
-
-
-from typing import List, Literal, Optional, Union
 
 from agentic_ai_platform.db.weaviate_db import WeaviateDB
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
