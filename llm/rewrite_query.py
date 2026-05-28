@@ -1,5 +1,5 @@
 from agentic_ai_platform.state_manager.queryState import QueryState
-from llm.llm import LLM
+from agentic_ai_platform.llm.llm import LLM
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
@@ -8,7 +8,7 @@ from typing import Type
 
 def create_rewrite_agent(schema: Type[BaseModel],
                          llm: LLM,
-                         ):
+                         system_prompt: str):
 
 
     def rewrite_query_agent(state : QueryState):
@@ -23,7 +23,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
 
         original_query = state.query
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an assistant that helps rewrite user queries to be more clear and specific."),
+            ("system", system_prompt),
             ("user", f"Rewrite the following query to improve its clarity and specificity:\n\n{original_query}")
         ])
 
