@@ -18,7 +18,8 @@ StreamMode = Literal["values", "messages", "custom", "updates"]
 
 
 class GraphBuild:
-    def __init__(self, enabled_persistentMemory=True):
+    def __init__(self, 
+                 enabled_persistentMemory=True):
         self.app = None
         self.config: Optional[RunnableConfig] = None
         self.enabled_persistentMemory = enabled_persistentMemory
