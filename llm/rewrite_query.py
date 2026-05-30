@@ -11,7 +11,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
                          system_prompt: str):
 
 
-    def rewrite_query_agent(state : QueryState):
+    def rewrite_query_agent(state):
         """
         Rewrite the input query to improve its clarity and specificity.
 
@@ -21,7 +21,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
             str: The rewritten query.
         """
 
-        original_query = state.query
+        original_query = state.query.question
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("user", f"Rewrite the following query to improve its clarity and specificity:\n\n{original_query}")
@@ -30,7 +30,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
         
         rewritten_query = llm.invoke(prompt.format_messages())
 
-        state.rewritten_query = rewritten_query
+        state.query.rewritten_question = rewritten_query
         return state
         
 

@@ -6,6 +6,7 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
 from agentic_ai_platform.state_manager.hallucination_signal import HallucinationCheckerConfig
 from agentic_ai_platform.state_manager.plan_state import PlanState
+from agentic_ai_platform.state_manager.queryState import QueryState
 from agentic_ai_platform.state_manager.tool_state import ToolState
 
 
@@ -76,6 +77,9 @@ class SuperviseState(BaseModel):
         default=None,
         description="Optional system-level instruction to shape both drafter and critic behaviour"
     )
+
+    query : QueryState = Field(
+        default_factory=QueryState, description="State related to query rewriting and generation")
 
     # Drafter output
     draft: Optional[Union[str,list]] = Field(

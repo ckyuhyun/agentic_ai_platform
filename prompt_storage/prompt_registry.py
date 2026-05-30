@@ -46,9 +46,12 @@ class SystemPromptVersion:
     updated_at: datetime           = field(default_factory=lambda: datetime.now(timezone.utc))
     tags: List[str]                = field(default_factory=list)
 
-    def as_messages(self) -> List[SystemMessage]:
+    def as_system_messages(self) -> List[SystemMessage]:
         """Return as a LangChain message list ready to prepend to a prompt."""
         return [SystemMessage(content=self.system_prompt)]
+    
+    def as_string_message(self) -> str:
+        return self.system_prompt
 
     def __repr__(self) -> str:
         return (
@@ -89,9 +92,6 @@ class PromptRegistry:
                     tags: Optional[List[str]] = None) -> SystemPromptVersion:
 
         prompt_type_value = self.prompts_storage.get(prompt_type, {})
-
-        if not prompt_type in get_args(PromptType):
-            raise RuntimeError(f"Incorrect prompt type({prompt_type})")
 
 
         if version_id is not None:

@@ -4,7 +4,7 @@ from langgraph.prebuilt import ToolNode
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
 from agentic_ai_platform.state_manager.draft_state import DraftConfig, SuperviseState
-from agentic_ai_platform.agents.self_collection_agents.planner_agent import create_planner_agent
+from agentic_ai_platform.agents.planner_execution_agents.planner_agent import create_planner_agent
 from agentic_ai_platform.agents.drafter_critic_agents.drafter_agent import create_drafter_agent
 from agentic_ai_platform.agents.drafter_critic_agents.grader_agent import create_grader_agent
 from agentic_ai_platform.graph.human_in_loop import HITL
@@ -66,7 +66,7 @@ def build_drafter_critic_graph():
     Build graph
     """
     plan_system_prompt = prompt_hub.get_prompt_by_type_version_tags(prompt_type="planner", 
-                                                                    version_id="0").as_messages()
+                                                                    version_id="0").as_system_messages()
     plan_agent = create_planner_agent(schema=PlanState,
                                       system_prompt=plan_system_prompt,
                                       graph_llm=LLM("llama3.1").llm_instance)
@@ -78,7 +78,7 @@ def build_drafter_critic_graph():
     
     
     critic_prompt = prompt_hub.get_prompt_by_type_version_tags(prompt_type="critic", 
-                                                               version_id="0").as_messages()
+                                                               version_id="0").as_system_messages()
     critic_agent = create_grader_agent(CriticFeedback,
                                       system_prompt=critic_prompt,
                                       eval_tools=[EvalsTools.check_hallucinations],

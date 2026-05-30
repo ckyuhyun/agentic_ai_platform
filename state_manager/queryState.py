@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class QueryState(BaseModel):
-    question: str
-    rewritten_question: str
-    documents: List[Document]
-    generation: str
+    question: str = Field(default="", description="The original user query that needs to be rewritten.")
+    rewritten_question: str = "" # Field(default_value="", description="The rewritten query after processing by the rewrite agent.")
+    documents: List[Document] = None #Field(default_factory=list, description="The retrieved documents relevant to the query.")
+    generation: str = "" #Field(default_value="", description="The final generated answer based on the rewritten query and retrieved documents.")
