@@ -1,3 +1,6 @@
+import re
+
+from agentic_ai_platform.eval.query_rewriter_evaluator import QueryRewriterEvaluator
 from agentic_ai_platform.state_manager.queryState import QueryState
 from agentic_ai_platform.llm.llm import LLM
 
@@ -24,13 +27,22 @@ def create_rewrite_agent(schema: Type[BaseModel],
         original_query = state.query.question
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
-            ("user", f"Rewrite the following query to improve its clarity and specificity:\n\n{original_query}")
+            ("user", f"Rewrite the following query to improve its clarity and specificity and returns the rewritten query:\n\n{original_query}")
         ])
 
         
         rewritten_query = llm.invoke(prompt.format_messages())
+        rewritten_query = re.search(r'"([^"]*)"',rewritten_query.content).group(1) # extract the rewritten query from the LLM response, assuming it's enclosed in quotes
+
+        rewrite_evalulator = QueryRewriterEvaluator(system_eval_prompt="Evaluate the rewritten query based on intent alignment, disambiguation, and retrieval suitability. Provide scores from 0.0 to 1.0 for each aspect along with a concise justification.")
+        
+        evaulated_result = rewrite_evalulator.evaluate(
+            query=rewritten_query,
+            LLM=llm
+        )
 
         state.query.rewritten_question = rewritten_query
+        state.query.evaluation = evaulated_result
         return state
         
 
