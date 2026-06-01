@@ -78,7 +78,7 @@ class SuperviseState(BaseModel):
         description="Optional system-level instruction to shape both drafter and critic behaviour"
     )
 
-    query : QueryState = Field(
+    query_state : QueryState = Field(
         default_factory=QueryState, description="State related to query rewriting and generation")
 
     # Drafter output

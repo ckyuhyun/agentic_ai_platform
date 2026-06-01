@@ -11,7 +11,8 @@ from typing import Type
 
 def create_rewrite_agent(schema: Type[BaseModel],
                          llm: LLM,
-                         system_prompt: str):
+                         system_prompt: str,
+                         system_eval_prompt: str):
 
 
     def rewrite_query_agent(state):
@@ -24,25 +25,25 @@ def create_rewrite_agent(schema: Type[BaseModel],
             str: The rewritten query.
         """
 
-        original_query = state.query.question
+        original_query = state.query_state.question
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("user", f"Rewrite the following query to improve its clarity and specificity and returns the rewritten query:\n\n{original_query}")
-        ])
+        ]).format_messages()
 
         
-        rewritten_query = llm.invoke(prompt.format_messages())
+        rewritten_query = llm.invoke(prompt)
         rewritten_query = re.search(r'"([^"]*)"',rewritten_query.content).group(1) # extract the rewritten query from the LLM response, assuming it's enclosed in quotes
 
-        rewrite_evalulator = QueryRewriterEvaluator(system_eval_prompt="Evaluate the rewritten query based on intent alignment, disambiguation, and retrieval suitability. Provide scores from 0.0 to 1.0 for each aspect along with a concise justification.")
+        rewrite_evalulator = QueryRewriterEvaluator(system_eval_prompt=system_eval_prompt)
         
         evaulated_result = rewrite_evalulator.evaluate(
             query=rewritten_query,
             LLM=llm
         )
 
-        state.query.rewritten_question = rewritten_query
-        state.query.evaluation = evaulated_result
+        state.query_state.rewritten_question = rewritten_query
+        state.query_state.evaluation = evaulated_result
         return state
         
 

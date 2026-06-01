@@ -1,3 +1,6 @@
+import os
+
+from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import StateSnapshot
@@ -24,6 +27,9 @@ class GraphBuild:
         self.config: Optional[RunnableConfig] = None
         self.enabled_persistentMemory = enabled_persistentMemory
 
+        load_dotenv()
+        self.langsmith_thread_id = os.getenv("LANGSMITH_THREAD_ID")
+
     def run_graph(
         self,
         graph: StateGraph,
@@ -37,7 +43,7 @@ class GraphBuild:
             self.app = graph.compile()
 
         self.config = {
-            "configurable": {"thread_id": "1"},
+            "configurable": {"thread_id": self.langsmith_thread_id},
             "metadata" : {"run_name": "LLM_service", "task": str(init_state.task)}
             }
 

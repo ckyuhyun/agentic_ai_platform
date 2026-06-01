@@ -4,7 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 
 
-from agentic_ai_platform.state_manager.draft_state import NodeTrace
+from agentic_ai_platform.state_manager.supervise_state import NodeTrace
 from agentic_ai_platform.state_manager.plan_state import PlanState
 
 
@@ -27,7 +27,7 @@ def create_planner_agent(
 
         trace = NodeTrace.start(node="planner", iteration=state.iteration, model="llama3.1")
 
-        state.plan.input = state.task
+        state.plan.input = state.query_state.rewritten_question
         final_prompt = prompt_template.invoke({"input": state.plan.input})
 
         structed_model = graph_llm.with_structured_output(schema)\

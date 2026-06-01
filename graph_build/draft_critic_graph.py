@@ -3,12 +3,12 @@ from langgraph.types import interrupt
 from langgraph.prebuilt import ToolNode
 
 from agentic_ai_platform.graph.graph_build import GraphBuild
-from agentic_ai_platform.state_manager.draft_state import DraftConfig, SuperviseState
+from agentic_ai_platform.state_manager.supervise_state import DraftConfig, SuperviseState
 from agentic_ai_platform.agents.planner_execution_agents.planner_agent import create_planner_agent
 from agentic_ai_platform.agents.drafter_critic_agents.drafter_agent import create_drafter_agent
 from agentic_ai_platform.agents.drafter_critic_agents.grader_agent import create_grader_agent
 from agentic_ai_platform.graph.human_in_loop import HITL
-from agentic_ai_platform.state_manager.draft_state import CriticFeedback
+from agentic_ai_platform.state_manager.supervise_state import CriticFeedback
 from agentic_ai_platform.state_manager.plan_state import PlanState
 from agentic_ai_platform.tools.grader_tools import EvalsTools
 from agentic_ai_platform.llm.llm import LLM
