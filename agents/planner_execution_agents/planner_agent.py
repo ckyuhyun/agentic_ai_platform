@@ -11,7 +11,7 @@ from agentic_ai_platform.state_manager.plan_state import PlanState
 
 def create_planner_agent(
     schema: Type[BaseModel],
-    system_prompt: List,
+    system_prompt: str,
     graph_llm  = None,
 ):
     """
@@ -19,16 +19,20 @@ def create_planner_agent(
 
     schema must have: plan (str), reasoning (str), next_steps (list[str]).
     """
-    prompt_template = ChatPromptTemplate.from_messages(
-        system_prompt + [("human", "{input}")]
-    )
+    
 
     def planner_agent(state):
+        
 
+        prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                ("human", "{input}")]).format_messages(
+                    input=state.query_state.rewritten_question
+                )
+        
         trace = NodeTrace.start(node="planner", iteration=state.iteration, model="llama3.1")
-
-        state.plan.input = state.query_state.rewritten_question
-        final_prompt = prompt_template.invoke({"input": state.plan.input})
+        
+        
 
         structed_model = graph_llm.with_structured_output(schema)\
                                   .with_config(RunnableConfig(
@@ -40,7 +44,7 @@ def create_planner_agent(
                                         ))
         
         planstate: PlanState = structed_model.invoke(
-            final_prompt,
+            prompt,
         )
 
         state.plan = planstate
