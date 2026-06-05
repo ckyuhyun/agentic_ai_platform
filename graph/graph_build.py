@@ -44,7 +44,8 @@ class GraphBuild:
 
         self.config = {
             "configurable": {"thread_id": self.langsmith_thread_id},
-            "metadata" : {"run_name": "LLM_service", "task": str(init_state.task)}
+            #"metadata" : {"run_name": "LLM_service", "task": str(init_state.task)}
+            "metadata" : {"run_name": "LLM_service"}
             }
 
 
