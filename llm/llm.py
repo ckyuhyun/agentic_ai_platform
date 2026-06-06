@@ -21,7 +21,16 @@ class LLM:
     def bind_tools(self, tools: list):
         """Bind tools to the LLM so it can call them during inference."""
         self.llm_instance = self._llm_model_.bind_tools(tools)
-        
+
+
+    def prompt_by_single_prompt(self, 
+                system_human_message:str) -> str:
+        """
+        Invoke the LLM with the given system and human messages, and return the response.
+        """
+
+        response =self.llm_instance.invoke(system_human_message)
+        return response    
     
     def prompt(self, 
              system_message: str = None,
