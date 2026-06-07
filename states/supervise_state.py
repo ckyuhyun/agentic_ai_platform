@@ -4,10 +4,10 @@ from typing import Annotated, Optional, List, Union
 from pydantic import BaseModel, Field, model_validator
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
-from agentic_ai_platform.state_manager.hallucination_signal import HallucinationCheckerConfig
-from agentic_ai_platform.state_manager.plan_state import PlanState
-from agentic_ai_platform.state_manager.queryState import QueryState
-from agentic_ai_platform.state_manager.tool_state import ToolState
+from agentic_ai_platform.states.hallucination_signal_state import HallucinationCheckerConfig
+from agentic_ai_platform.states.plan_state import PlanState
+from agentic_ai_platform.states.queryState import QueryState
+from agentic_ai_platform.states.tool_state import ToolState
 
 
 class NodeTrace(BaseModel):

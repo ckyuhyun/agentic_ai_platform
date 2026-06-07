@@ -1,7 +1,7 @@
 from langsmith import Client
 from collections import deque
 
-from agentic_ai_platform.state_manager.supervise_state import NodeTrace
+from agentic_ai_platform.states.supervise_state import NodeTrace
 
 ls = Client()
 

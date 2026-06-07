@@ -3,8 +3,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from agentic_ai_platform.llm.llm import LLM
-from agentic_ai_platform.state_manager.supervise_state import SuperviseState, NodeTrace
-from agentic_ai_platform.state_manager.tool_state import ToolState
+from agentic_ai_platform.states.supervise_state import SuperviseState, NodeTrace
+from agentic_ai_platform.states.tool_state import ToolState
 from agentic_ai_platform.tools.tool import Tools
 from agentic_ai_platform.utils.color_print import C, cprint
 

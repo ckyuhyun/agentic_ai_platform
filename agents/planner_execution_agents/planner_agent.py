@@ -4,14 +4,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 
 
-from agentic_ai_platform.state_manager.supervise_state import NodeTrace
-from agentic_ai_platform.state_manager.plan_state import PlanState
+from agentic_ai_platform.states.supervise_state import NodeTrace
+from agentic_ai_platform.states.plan_state import PlanState
 
 
 
 def create_planner_agent(
     schema: Type[BaseModel],
-    system_prompt: str,
+    system_prompt: str = None,
     graph_llm  = None,
 ):
     """
@@ -43,9 +43,7 @@ def create_planner_agent(
                                             tags=["planner"]
                                         ))
         
-        planstate: PlanState = structed_model.invoke(
-            prompt,
-        )
+        planstate: PlanState = structed_model.invoke(prompt)
 
         state.plan = planstate
         

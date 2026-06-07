@@ -4,8 +4,8 @@ from typing import List, Type
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agentic_ai_platform.llm.llm import LLM
-from agentic_ai_platform.state_manager.supervise_state import SuperviseState
-from agentic_ai_platform.state_manager.hallucination_signal import HallucinationSignal, SafetyJudge
+from agentic_ai_platform.states.supervise_state import SuperviseState
+from agentic_ai_platform.states.hallucination_signal_state import HallucinationSignal, SafetyJudge
  
 
 from agentic_ai_platform import prompt_hub

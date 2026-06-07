@@ -4,8 +4,8 @@ from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
-from agentic_ai_platform.state_manager.supervise_state import NodeTrace
-from agentic_ai_platform.state_manager.tool_state import ToolState
+from agentic_ai_platform.states.supervise_state import NodeTrace
+from agentic_ai_platform.states.tool_state import ToolState
 
 
 def create_execution_agent(

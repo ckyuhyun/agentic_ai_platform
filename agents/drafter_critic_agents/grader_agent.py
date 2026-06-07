@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from langchain_core.tools import BaseTool
 from langchain_core.messages import HumanMessage
 
-from agentic_ai_platform.state_manager.supervise_state import SuperviseState, NodeTrace
+from agentic_ai_platform.states.supervise_state import SuperviseState, NodeTrace
 from agentic_ai_platform.tools.grader_tools import EvalsTools
 
 
