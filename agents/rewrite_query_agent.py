@@ -29,7 +29,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
             ("system", system_prompt),
             ("user", "Rewrite the following query to improve its clarity and specificity and returns the rewritten query:\n\n{original_query}")
         ]).format_messages(
-            original_query=state.query_state.question
+            original_query=state.plan.input
         )
 
         

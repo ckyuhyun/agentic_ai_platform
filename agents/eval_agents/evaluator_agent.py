@@ -18,8 +18,6 @@ def create_evaluator_agent(
     
 
     def evaluator_agent(state):
-        
-
         prompt = ChatPromptTemplate.from_messages([
                 ("system", system_prompt),
                 ("human", "{input}")]).format_messages(
@@ -30,8 +28,8 @@ def create_evaluator_agent(
         
         evaluation_result = structed_model.invoke(prompt)
 
-        state.query_state.evaluation = evaluation_result
-        
-        return state
+        updated_query_state = state.query_state.model_copy(update={"evaluation": evaluation_result})
+
+        return state.model_copy(update={"query_state": updated_query_state})
 
     return evaluator_agent

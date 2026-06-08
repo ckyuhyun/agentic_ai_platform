@@ -23,7 +23,7 @@ def create_planner_agent(
 
     def planner_agent(state):
         
-
+        
         prompt = ChatPromptTemplate.from_messages([
                 ("system", system_prompt),
                 ("human", "{input}")]).format_messages(
@@ -31,8 +31,6 @@ def create_planner_agent(
                 )
         
         trace = NodeTrace.start(node="planner", iteration=state.iteration, model="llama3.1")
-        
-        
 
         structed_model = graph_llm.with_structured_output(schema)\
                                   .with_config(RunnableConfig(
@@ -44,9 +42,8 @@ def create_planner_agent(
                                         ))
         
         planstate: PlanState = structed_model.invoke(prompt)
-
-        state.plan = planstate
+        planstate.input = state.query_state.rewritten_question
         
-        return state
+        return state.model_copy(update={"plan": planstate})
 
     return planner_agent

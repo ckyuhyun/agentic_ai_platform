@@ -71,12 +71,8 @@ class SuperviseState(BaseModel):
 
     # Task definition
     task: Annotated[str, operator.add] = Field(
-        description="The task or prompt the drafter must complete")
-    
-    system_prompt: Optional[str] = Field(
-        default=None,
-        description="Optional system-level instruction to shape both drafter and critic behaviour"
-    )
+        description="The task or prompt the drafter must complete")    
+
 
     query_state : QueryState = Field(
         default_factory=QueryState, description="State related to query rewriting and generation")
