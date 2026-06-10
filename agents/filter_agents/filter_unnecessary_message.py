@@ -9,7 +9,11 @@ from track_issue_system.State.filter_message_state import FilterMessageBatchStat
 
 
 def create_message_filter_agent(node_llm,
-                                system_prompt: str):
+                                system_prompt: str,
+                                batch_size: int = 20,
+                                max_concurrency: int = 4):
+
+    prompt_template = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
 
     def message_filter_agent(state):
         """
@@ -27,16 +31,20 @@ def create_message_filter_agent(node_llm,
         if not message_texts:
             return state.model_copy(update={"messages": json.dumps([])})
 
-        joined_str = "\n".join(f"{i}: {text}" for i, text in enumerate(message_texts))
+        chunks = [message_texts[i:i + batch_size] for i in range(0, len(message_texts), batch_size)]
 
-        prompt_template = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
-        prompt = prompt_template.format_messages(input=joined_str)
-        prompt[0].additional_kwargs["cache_control"] = {"type": "ephemeral"}
+        prompts = []
+        for chunk_index, chunk in enumerate(chunks):
+            offset = chunk_index * batch_size
+            joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
+            prompts.append(prompt_template.format_messages(input=joined_str))
 
-        result = node_llm.llm_instance.with_structured_output(FilterMessageBatchState).invoke(prompt)
+        structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchState)
+        results = structured_llm.batch(prompts, config={"max_concurrency": max_concurrency})
+        all_items = [item for result in results for item in result.items]
 
         # relevant_indices = sorted(
-        #     item.index for item in result.items
+        #     item.index for item in all_items
         #     if item.not_cleaned_message and 0 <= item.index < len(message_texts)
         # )
         # final_cleaned_messages = [message_texts[i] for i in relevant_indices]
