@@ -2,10 +2,38 @@
 
 from langchain.messages import ToolMessage
 import json
+from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from track_issue_system.State.filter_message_state import FilterMessageBatchState
+from track_issue_system.State.filter_message_state import FilterMessageBatchState, FilterMessageItem
+
+
+def classify_messages(node_llm,
+                       prompt_template: ChatPromptTemplate,
+                       message_texts: List[str],
+                       batch_size: int = 20,
+                       max_concurrency: int = 4) -> List[FilterMessageItem]:
+    """
+    Classify each message in message_texts as relevant/not relevant, in chunks of
+    batch_size sent concurrently via .batch(). Returned items keep their original
+    (global) index into message_texts.
+    """
+
+    if not message_texts:
+        return []
+
+    chunks = [message_texts[i:i + batch_size] for i in range(0, len(message_texts), batch_size)]
+
+    prompts = []
+    for chunk_index, chunk in enumerate(chunks):
+        offset = chunk_index * batch_size
+        joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
+        prompts.append(prompt_template.format_messages(input=joined_str))
+
+    structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchState)
+    results = structured_llm.batch(prompts, config={"max_concurrency": max_concurrency})
+    return [item for result in results for item in result.items]
 
 
 def create_message_filter_agent(node_llm,
@@ -31,17 +59,8 @@ def create_message_filter_agent(node_llm,
         if not message_texts:
             return state.model_copy(update={"messages": json.dumps([])})
 
-        chunks = [message_texts[i:i + batch_size] for i in range(0, len(message_texts), batch_size)]
-
-        prompts = []
-        for chunk_index, chunk in enumerate(chunks):
-            offset = chunk_index * batch_size
-            joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
-            prompts.append(prompt_template.format_messages(input=joined_str))
-
-        structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchState)
-        results = structured_llm.batch(prompts, config={"max_concurrency": max_concurrency})
-        all_items = [item for result in results for item in result.items]
+        all_items = classify_messages(node_llm, prompt_template, message_texts,
+                                       batch_size=batch_size, max_concurrency=max_concurrency)
 
         # relevant_indices = sorted(
         #     item.index for item in all_items
@@ -49,7 +68,8 @@ def create_message_filter_agent(node_llm,
         # )
         # final_cleaned_messages = [message_texts[i] for i in relevant_indices]
 
-        #return state.model_copy(update={"messages": json.dumps(final_cleaned_messages)})
-        return state
+        filtered = FilterMessageBatchState(items=all_items)
+        return state.model_copy(update={"messages": filtered.model_dump_json()})
+        
 
     return message_filter_agent
