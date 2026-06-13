@@ -79,7 +79,8 @@ class SuperviseState(BaseModel):
 
     # Drafter output
     draft: Optional[Union[str,list]] = Field(
-        default=None, description="Most recent draft produced by the drafter")
+        default=None, description="Most recent draft produced by the drafter")    
+    
 
     # Critic output
     critique: Optional[CriticFeedback] = Field(
@@ -104,6 +105,11 @@ class SuperviseState(BaseModel):
     # LangGraph message history
     messages: Annotated[list[AnyMessage], add_messages] = Field(
         default_factory=list)
+
+    # Cursor into `messages` marking how many have been consumed by downstream
+    # agents (e.g. rewrite_query_agent picking up new human_review answers).
+    last_reviewed_message_index: int = Field(
+        default=0, description="Number of messages already processed from the message history")
 
     # planner state
     plan : PlanState = Field(

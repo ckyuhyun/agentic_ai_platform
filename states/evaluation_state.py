@@ -41,4 +41,11 @@ class EvaluationState(BaseModel):
                          "score from 0 (not suitable) to 1 (suitable)"
     )
     suggested_rewrites: str = Field(
-        description="Specific instructions on how to rewrite the prompt or tools to fix the issue.")
+        description="Specific instructions on how to rewrite the prompt or tools to fix the issue." )
+    
+    user_suggestions: list[str] = Field(
+        description="""list of questions to ask the user to clarify their intent or provide missing information in detail.
+                       the goal of this suggestions is to get better plans and not to generate more user_suggestions for next time.
+                       these should be written very clearly and user-friendly.
+                       """
+    )
