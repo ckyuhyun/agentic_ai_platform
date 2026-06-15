@@ -6,6 +6,7 @@ from typing import Type
 
 from agentic_ai_platform.states.queryState import QueryState
 from agentic_ai_platform.llm.llm import LLM
+from agentic_ai_platform.states.supervise_state import SuperviseState
 from agentic_ai_platform.utils.message_utils import extract_new_messages
 
 
@@ -16,7 +17,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
                          system_prompt: str):
 
 
-    def rewrite_query_agent(state:BaseModel):
+    def rewrite_query_agent(state:SuperviseState):
         """
         Rewrite the input query to improve its clarity and specificity.
 
@@ -53,10 +54,10 @@ def create_rewrite_agent(schema: Type[BaseModel],
         rewritten_query = llm.invoke(prompt)
         #rewritten_query = re.search(r'"([^"]*)"',rewritten_query.content).group(1) # extract the rewritten query from the LLM response, assuming it's enclosed in quotes
 
-        state.query_state.rewritten_question = rewritten_query
-        state.plan.input = rewritten_query
+        state.query_state.rewritten_question = rewritten_query.content
+        #state.plan.input = rewritten_query
         return state.model_copy(update={"query_state": state.query_state,
-                                        "plan": state.plan,
+         #                               "plan": state.plan,
                                         "last_reviewed_message_index": new_message_index})
         
 
@@ -65,4 +66,4 @@ def create_rewrite_agent(schema: Type[BaseModel],
 
 
 
-    
+     
