@@ -30,7 +30,9 @@ def create_planner_agent(
                     input=state.query_state.rewritten_question
                 )
         
-        trace = NodeTrace.start(node="planner", iteration=state.iteration, model="llama3.1")
+        trace = NodeTrace.start(node="planner", 
+                                iteration=state.iteration, 
+                                model="llama3.1")
 
         structed_model = graph_llm.with_structured_output(schema)\
                                   .with_config(RunnableConfig(
@@ -41,8 +43,7 @@ def create_planner_agent(
                                             tags=["planner"]
                                         ))
         
-        planstate: PlanState = structed_model.invoke(prompt)
-        planstate.input = state.query_state.rewritten_question
+        planstate: PlanState = structed_model.invoke(prompt)        
         
         return state.model_copy(update={"plan": planstate})
 

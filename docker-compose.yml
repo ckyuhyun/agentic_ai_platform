@@ -1,0 +1,86 @@
+version : '1.0'
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name : ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=* # Fixes the 403 Forbidden for external tools    
+    volumes:
+      - ollama_data:/root/.ollama
+    # ── GPU (NVIDIA) ──────────────────────────────────────────────────────────
+    # Remove the `deploy` block entirely if you have no GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      
+  # Pull the model once Ollama is healthy, then exit.
+  ollama-pull:
+    image: curlimages/curl:latest
+    container_name: ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        curl -f --no-buffer -X POST http://ollama:11434/api/pull -d '{"name": "llama3.1"}' &&
+        curl -f --no-buffer -X POST http://ollama:11434/api/pull -d '{"name": "nomic-embed-text:latest"}'
+    restart: "no"
+
+  weaviate:
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --scheme
+      - http
+    image: cr.weaviate.io/semitechnologies/weaviate:1.34.0
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    restart: on-failure:5
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      ENABLE_MODULES: "text2vec-ollama,generative-ollama"
+      CLUSTER_HOSTNAME: "node1"
+      OLLAMA_API_ENDPOINT: "http://ollama:11434"
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=agnetic_ai_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+volumes:
+  weaviate_data:
+  ollama_data:
+  pgdata:
