@@ -74,9 +74,9 @@ services:
       - POSTGRES_PASSWORD=aQ!1234567
     ports:
       - "5433:5432"
-    volumes:
-    restart: unless-stopped
+    volumes:    
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
     depends_on:
       ollama:
         condition: service_healthy
