@@ -55,7 +55,7 @@ services:
       - "50051:50051"
     volumes:
       - weaviate_data:/var/lib/weaviate
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
@@ -71,10 +71,11 @@ services:
     environment:
       - POSTGRES_DB=agnetic_ai_db
       - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=
+      - POSTGRES_PASSWORD=aQ!1234567
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
+    restart: unless-stopped
       - pgdata:/var/lib/postgresql/data
     depends_on:
       ollama:
