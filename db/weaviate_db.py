@@ -45,7 +45,7 @@ class WeaviateDB:
 
         self._collection_name = collection_name
         self._embedded_model = embedded_model
-        self._properties = None
+        self._properties_config = None
 
         self.api_endpoint_host = os.getenv("WEAVIATE_HOST")
         self.api_endpoint_port = os.getenv("WEAVIATE_PORT")
@@ -61,8 +61,8 @@ class WeaviateDB:
         return self._embedded_model
     
     @property
-    def properties(self):
-        return self._properties
+    def properties_config(self):
+        return self._properties_config
         
 
     @collection_name.setter
@@ -75,10 +75,10 @@ class WeaviateDB:
                        value:str):
         self._embedded_model = value
 
-    @properties.setter
-    def properties(self, 
-                   value : list[WeaviateProperty]):
-        self._properties = value
+    @properties_config.setter
+    def properties_config(self, 
+                   value : list):
+        self._properties_config = value
 
     
 
@@ -109,64 +109,36 @@ class WeaviateDB:
         if self._collection_name is None:
             raise Exception("collection name not addressed")
         
-        if self._properties is None:
+        if self._properties_config is None:
             raise Exception("properties not being set yet")
-        
+               
+            
+
         with weaviate.connect_to_local(host=self.api_endpoint_host, 
-                                       port=self.api_endpoint_port) as client:              
+                                       port=self.api_endpoint_port) as client: 
+            
             try:
                 if client.collections.exists(self._collection_name):
                     client.collections.delete(self._collection_name)
             except Exception as e:
                 raise Exception(f"Error deleting existing collection: {str(e)}")
 
-        with weaviate.connect_to_local(host=self.api_endpoint_host, 
-                                       port=self.api_endpoint_port) as client: 
-
             if not client.collections.exists(self._collection_name):
                 wvc_property = []
-                for p in self._properties:
-                    wvc_property.append(
-                        wvc.Property(
-                            name=p.name,
-                            data_type=p.datatype,
-                            description=p.description
-                        )
-                    )
+                # for p in self._properties:
+                #     wvc_property.append(
+                #         wvc.Property(
+                #             name=p.name,
+                #             data_type=p.datatype,
+                #             description=p.description
+                #         )
+                #     )
 
                 try:
                     client.collections.create(
                         name=self._collection_name,
                         description=f"Collection for {self._collection_name}",
-                        properties=wvc_property,
-                        
-                #         [
-                #             wvc.Property(
-                #                 name="page_content",
-                #                 data_type=wvc.DataType.TEXT,
-                #                 description="The text content of the document"
-                #             ),
-                #             # wvc.Property(
-                #             #     name="coordinates",
-                #             #     data_type=wvc.DataType.TEXT, 
-                #             #     index_filterable=False,
-                #             #     index_searchable=False,
-                #             #     description="Raw layout metadata ignored by vector search indices"
-                #             # ),
-                # #             wvc.Property(
-                # #                 name="points",
-                # #                 data_type=wvc.DataType.TEXT, 
-                # # #                index_filterable=False,
-                # #  #               index_searchable=False,
-                # #                 description="Raw layout metadata ignored by vector search indices"
-                # #             ),
-                #             # wvc.Property(
-                #             #     name="metadata",
-                #             #     data_type=wvc.DataType.TEXT,
-                #             #     description="Metadata associated with the document"
-                #             # )
-
-                #         ],
+                        properties=self._properties_config,                        
                         vector_index_config=Configure.VectorIndex.hnsw(
                             distance_metric=VectorDistances.COSINE,
                             ef_construction=128, # Build-time accuracy (higher = better, slower)
@@ -226,9 +198,13 @@ class WeaviateDB:
                         with collection_object.batch.dynamic() as batch:    
                             if isinstance(text_documents, list):
                                 for obj in text_documents:
-                                    if isinstance(obj, dict):
-                                        obj.setdefault("uuid", object_uuid)
-                                    batch.add_object(properties=obj,
+                                    #if isinstance(obj.model_fields, dict):
+                                    #    obj.model_fields.setdefault("uuid", object_uuid)
+
+                                    p = obj.page_content if hasattr(obj, 'page_content') else obj
+                                    
+
+                                    batch.add_object(properties= dict(content=p),
                                                      uuid=object_uuid)
                                     
                             elif isinstance(text_documents, dict):

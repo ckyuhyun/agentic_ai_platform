@@ -148,7 +148,8 @@ class Ingest:
         
         try:
             #doc = document[0] if isinstance(document, tuple) else document
-            return self.text_splitter.split_documents(document) if isinstance(document, Document) else self.text_splitter.split_documents(document[0])
+            #return self.text_splitter.split_documents(document) if isinstance(document, Document) else self.text_splitter.split_documents(document[0])
+            return self.text_splitter.split_documents(document)
         except Exception as e:
             raise Exception("Error splitting document: " + str(e))   
 
@@ -183,11 +184,17 @@ class Ingest:
         """
         weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name,
                                  embedded_model=embedded_model)
-        weaviate_db.properties = list[WeaviateProperty].append(
-            WeaviateProperty(name="page_content",
-                             datatype=wvc.DataType.TEXT,
-                             description="The text content of the document")
-        )
+        
+    
+        try:
+            db_property_config = [wvc.Property(name="content", 
+                                            data_type=wvc.DataType.TEXT)]
+        except Exception as e:
+            raise e
+                        
+
+            
+        weaviate_db.properties_config = db_property_config
         weaviate_db.update_query(text_documents=documents)
     
 

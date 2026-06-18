@@ -36,7 +36,7 @@ class DBSync:
 
         
         # update data
-        weaviate.properties = wvc_property
+        weaviate.properties_config = wvc_property
         weaviate.update_query(text_documents=fetched_data)
 
 
