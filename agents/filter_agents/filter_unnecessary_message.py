@@ -69,7 +69,8 @@ def create_message_filter_agent(node_llm,
         # final_cleaned_messages = [message_texts[i] for i in relevant_indices]
 
         filtered = FilterMessageBatchState(items=all_items)
-        return state.model_copy(update={"messages": filtered.model_dump_json()})
+        
+        return state.model_copy(update={"filtered_messages": filtered, "messages_filtered": True})
         
 
     return message_filter_agent
