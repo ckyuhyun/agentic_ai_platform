@@ -1,6 +1,8 @@
 import os
 from typing import List, Literal, Optional, Union
 
+import weaviate.classes.config as wvc
+
 from langchain_community.document_loaders import (
     PyPDFLoader,
     TextLoader, 
@@ -9,6 +11,7 @@ from langchain_community.document_loaders import (
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
+from agentic_ai_platform.data.weaviate_property_data import WeaviateProperty
 from agentic_ai_platform.db.weaviate_db import WeaviateDB
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
 from agentic_ai_platform.RAG.embedding import Embeddings
@@ -84,6 +87,7 @@ class Ingest:
                 weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name, 
                                          embedded_model=embed.get_auto_decided_embedding_model())
                 
+                
                 results = weaviate_db.search_query(query=query, 
                                                    top_k=top_k)
                 return results
@@ -144,7 +148,8 @@ class Ingest:
         
         try:
             #doc = document[0] if isinstance(document, tuple) else document
-            return self.text_splitter.split_documents(document) if isinstance(document, Document) else self.text_splitter.split_documents(document[0])
+            #return self.text_splitter.split_documents(document) if isinstance(document, Document) else self.text_splitter.split_documents(document[0])
+            return self.text_splitter.split_documents(document)
         except Exception as e:
             raise Exception("Error splitting document: " + str(e))   
 
@@ -179,6 +184,17 @@ class Ingest:
         """
         weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name,
                                  embedded_model=embedded_model)
+        
+    
+        try:
+            db_property_config = [wvc.Property(name="content", 
+                                            data_type=wvc.DataType.TEXT)]
+        except Exception as e:
+            raise e
+                        
+
+            
+        weaviate_db.properties_config = db_property_config
         weaviate_db.update_query(text_documents=documents)
     
 

@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import Optional, List, Dict, Union
 from dotenv import load_dotenv
 import weaviate
@@ -10,6 +11,8 @@ from weaviate.classes.config import Configure, VectorDistances
 import json
 import logging
 import sys
+
+from agentic_ai_platform.data.weaviate_property_data import WeaviateProperty
 
 
 # /c:/Users/c_kyu/Development/PersonalProject/rag_project/db/weaviate.py
@@ -34,19 +37,61 @@ import sys
 
 class WeaviateDB:
     def __init__(self,
-                 collection_name: str,
-                 embedded_model):
+                 collection_name: Optional[str] = None, 
+                 embedded_model: Optional[str] = None):
         
         load_dotenv()
 
 
-        self.collection_name = collection_name
+        self._collection_name = collection_name
+        self._embedded_model = embedded_model
+        self._properties_config = None
+
         self.api_endpoint_host = os.getenv("WEAVIATE_HOST")
         self.api_endpoint_port = os.getenv("WEAVIATE_PORT")
-        self.embedded_model = embedded_model
-        self.__collection_init__()
-            
+
+        #self.__collection_init__()
+
+    @property
+    def collection_name(self):
+        return self._collection_name
+
+    @property
+    def embedded_model(self):
+        return self._embedded_model
     
+    @property
+    def properties_config(self):
+        return self._properties_config
+        
+
+    @collection_name.setter
+    def collection_name(self,
+                       value:str):
+        self._collection_name = value
+
+    @embedded_model.setter
+    def embedded_model(self,
+                       value:str):
+        self._embedded_model = value
+
+    @properties_config.setter
+    def properties_config(self, 
+                   value : list):
+        self._properties_config = value
+
+    
+
+    @property
+    def db_connected(self) -> bool:
+        """Check whether the configured Weaviate instance is reachable."""
+        try:
+            with weaviate.connect_to_local(host=self.api_endpoint_host,
+                                           port=self.api_endpoint_port) as client:
+                return client.is_ready()
+        except Exception:
+            return False
+
     def update_query(
         self,
         text_documents : Union[List[Dict], Dict],
@@ -61,51 +106,39 @@ class WeaviateDB:
                         Each dict should contain the properties of the object to be added.  
         """        
 
-      
-        with weaviate.connect_to_local(host=self.api_endpoint_host, 
-                                       port=self.api_endpoint_port) as client:              
-            try:
-                if client.collections.exists(self.collection_name):
-                    client.collections.delete(self.collection_name)
-            except Exception as e:
-                raise Exception(f"Error deleting existing collection: {str(e)}")
+        if self._collection_name is None:
+            raise Exception("collection name not addressed")
+        
+        if self._properties_config is None:
+            raise Exception("properties not being set yet")
+               
+            
 
         with weaviate.connect_to_local(host=self.api_endpoint_host, 
                                        port=self.api_endpoint_port) as client: 
+            
+            try:
+                if client.collections.exists(self._collection_name):
+                    client.collections.delete(self._collection_name)
+            except Exception as e:
+                raise Exception(f"Error deleting existing collection: {str(e)}")
 
-            if not client.collections.exists(self.collection_name):
+            if not client.collections.exists(self._collection_name):
+                wvc_property = []
+                # for p in self._properties:
+                #     wvc_property.append(
+                #         wvc.Property(
+                #             name=p.name,
+                #             data_type=p.datatype,
+                #             description=p.description
+                #         )
+                #     )
+
                 try:
                     client.collections.create(
-                        name=self.collection_name,
-                        description=f"Collection for {self.collection_name}",
-                        
-                        properties=[
-                            wvc.Property(
-                                name="page_content",
-                                data_type=wvc.DataType.TEXT,
-                                description="The text content of the document"
-                            ),
-                            # wvc.Property(
-                            #     name="coordinates",
-                            #     data_type=wvc.DataType.TEXT, 
-                            #     index_filterable=False,
-                            #     index_searchable=False,
-                            #     description="Raw layout metadata ignored by vector search indices"
-                            # ),
-                #             wvc.Property(
-                #                 name="points",
-                #                 data_type=wvc.DataType.TEXT, 
-                # #                index_filterable=False,
-                #  #               index_searchable=False,
-                #                 description="Raw layout metadata ignored by vector search indices"
-                #             ),
-                            # wvc.Property(
-                            #     name="metadata",
-                            #     data_type=wvc.DataType.TEXT,
-                            #     description="Metadata associated with the document"
-                            # )
-
-                        ],
+                        name=self._collection_name,
+                        description=f"Collection for {self._collection_name}",
+                        properties=self._properties_config,                        
                         vector_index_config=Configure.VectorIndex.hnsw(
                             distance_metric=VectorDistances.COSINE,
                             ef_construction=128, # Build-time accuracy (higher = better, slower)
@@ -117,7 +150,7 @@ class WeaviateDB:
                 except Exception as e:
                     raise Exception(f"Error creating collection: {str(e)}")
                 
-            collection_object =  client.collections.get(self.collection_name)
+            collection_object =  client.collections.get(self._collection_name)
 
             # weaviate_vector_logger = logging.getLogger("langchain_weaviate.vectorstores")
 
@@ -132,56 +165,64 @@ class WeaviateDB:
             # weaviate_vector_logger.addHandler(handler)
             # weaviate_vector_logger.propagate = False
 
-            db = self.__get_weaviate_db__(client)
+            #db = self.__get_weaviate_db__(client)
 
-            try:
-                print(f"was trying to add {len(text_documents)} documents.")
-                result = db.add_documents(documents=text_documents)
-                print(f"Added {len(result)} documents.")
-
-            except Exception as e:
-                raise Exception(f"Error adding documents to Weaviate: {str(e)}")
             # try:
-            #     if text_documents:
-            #         #create a new uuid
-            #         object_uuid = str(uuid.uuid4())
+            #     print(f"was trying to add {len(text_documents)} documents.")
+            #     result = db.add_documents(documents=text_documents,
+            #                               ids=)
+            #     print(f"Added {len(result)} documents.")
 
-            #         if batch_size:
-            #             with collection_object.batch.fixed_size(batch_size=batch_size) as batch:                                
-            #                 if isinstance(text_documents, list):
-            #                     for obj in text_documents:
-            #                         # ensure each object has a uuid
-            #                         if isinstance(obj, dict):
-            #                             obj.setdefault("uuid", object_uuid)
+            # except Exception as e:
+            #     raise Exception(f"Error adding documents to Weaviate: {str(e)}")
+            try:
+                if text_documents:
+                    #create a new uuid
+                    object_uuid = str(uuid.uuid4())
 
-            #                         batch.add_object(properties=obj,
-            #                                          uuid=object_uuid)
-            #                 elif isinstance(text_documents, dict):
-            #                     text_documents.setdefault("uuid", object_uuid)
-            #                     batch.add_object(properties=text_documents,
-            #                                      uuid=object_uuid)
-            #         else:
-            #             with collection_object.batch.dynamic() as batch:    
-            #                 if isinstance(text_documents, list):
-            #                     for obj in text_documents:
-            #                         if isinstance(obj, dict):
-            #                             obj.setdefault("uuid", object_uuid)
-            #                         batch.add_object(properties=obj,
-            #                                          uuid=object_uuid)
+                    if batch_size:
+                        with collection_object.batch.fixed_size(batch_size=batch_size) as batch:
+                            if isinstance(text_documents, list):
+                                for obj in text_documents:
+                                    # ensure each object has a uuid
+                                    if isinstance(obj, dict):
+                                        obj.setdefault("uuid", object_uuid)
+
+                                    batch.add_object(properties=obj,
+                                                     uuid=object_uuid)
+                            elif isinstance(text_documents, dict):
+                                text_documents.setdefault("uuid", object_uuid)
+                                batch.add_object(properties=text_documents,
+                                                 uuid=object_uuid)
+                    else:
+                        with collection_object.batch.dynamic() as batch:    
+                            if isinstance(text_documents, list):
+                                for obj in text_documents:
+                                    #if isinstance(obj.model_fields, dict):
+                                    #    obj.model_fields.setdefault("uuid", object_uuid)
+
+                                    p = obj.page_content if hasattr(obj, 'page_content') else obj
                                     
-            #                 elif isinstance(text_documents, dict):
-            #                     text_documents.setdefault("uuid", object_uuid)
-            #                     batch.add_object(properties=text_documents,
-            #                                      uuid=object_uuid)
+
+                                    batch.add_object(properties= dict(content=p),
+                                                     uuid=object_uuid)
+                                    
+                            elif isinstance(text_documents, dict):
+                                text_documents.setdefault("uuid", object_uuid)
+                                batch.add_object(properties=text_documents,
+                                                 uuid=object_uuid)
             except Exception as e:
                 raise Exception(f"Error updating collection: {str(e)}")
             
 
     def read_data(self) -> None:
+        if self._collection_name is None:
+            raise Exception("collection name not addressed")
+        
         with weaviate.connect_to_local(host=self.api_endpoint_host, 
                                        port=self.api_endpoint_port) as client:
-            if client.collections.exists(self.collection_name):
-                collection_object =  client.collections.use(self.collection_name)
+            if client.collections.exists(self._collection_name):
+                collection_object =  client.collections.use(self._collection_name)
                 for item in collection_object.iterator():
                     print("---")
                     print(f"item: {item}")
@@ -192,34 +233,40 @@ class WeaviateDB:
             query: str,
             top_k: int = 5) -> Union[List[Dict], None]:
 
+        if self._collection_name is None:
+                    raise Exception("collection name not addressed")
+        
         with weaviate.connect_to_local(host=self.api_endpoint_host,
                                        port=self.api_endpoint_port) as client:
-            if client.collections.exists(self.collection_name):
+            if client.collections.exists(self._collection_name):
                 db = self.__get_weaviate_db__(client)
                 return db.similarity_search(query, k=top_k)
             return None
     
     def delete_collection(self):
+        if self._collection_name is None:
+            raise Exception("collection name not addressed")
+        
         with weaviate.connect_to_local(host=self.api_endpoint_host, 
                                        port=self.api_endpoint_port) as client:
-            client.collections.delete(self.collection_name)
+            client.collections.delete(self._collection_name)
 
-    def __collection_init__(self):
-            with weaviate.connect_to_local(host=self.api_endpoint_host, 
-                                           port=self.api_endpoint_port) as client:
-                try:
-                    if not client.collections.exists(self.collection_name):                    
-                        client.collections.create(
-                            self.collection_name,
-                            vector_config=Configure.Vectors.text2vec_ollama()
-                        )            
-                except Exception as e: 
-                    raise Exception(f"Error initializing collection: {str(e)}")
+    # def __collection_init__(self):
+    #         with weaviate.connect_to_local(host=self.api_endpoint_host, 
+    #                                        port=self.api_endpoint_port) as client:
+    #             try:
+    #                 if not client.collections.exists(self._collection_name):                    
+    #                     client.collections.create(
+    #                         self._collection_name,
+    #                         vector_config=Configure.Vectors.text2vec_ollama()
+    #                     )            
+    #             except Exception as e: 
+    #                 raise Exception(f"Error initializing collection: {str(e)}")
                 
     def __get_weaviate_db__(self,
                          client):
         return WeaviateVectorStore(client,
-                                         index_name=self.collection_name,
+                                         index_name=self._collection_name,
                                          text_key="text",
                                          embedding=self.embedded_model)      
         

@@ -62,18 +62,19 @@ class DraftConfig(BaseModel):
     #     return self
 
     
-
+class AbstractSuperviseState(BaseModel):
+    messages_filtered : bool = Field(
+        default=False, description="if the slack messages filtered out to remove unnecessary messages, return True")
     
 
 
-class SuperviseState(BaseModel):
+class SuperviseState(AbstractSuperviseState):
     """State shared between the drafter and critic nodes."""
 
     # Task definition
     task: Annotated[str, operator.add] = Field(
-        description="The task or prompt the drafter must complete")    
-
-
+        description="The task or prompt the drafter must complete")   
+    
     query_state : QueryState = Field(
         default_factory=QueryState, description="State related to query rewriting and generation")
 
