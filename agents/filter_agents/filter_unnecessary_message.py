@@ -8,6 +8,10 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from track_issue_system.State.filter_message_state import FilterMessageBatchState, FilterMessageItem
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def classify_messages(node_llm,
                        prompt_template: ChatPromptTemplate,
@@ -32,7 +36,8 @@ def classify_messages(node_llm,
         prompts.append(prompt_template.format_messages(input=joined_str))
 
     structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchState)
-    results = structured_llm.batch(prompts, config={"max_concurrency": max_concurrency})
+    results = structured_llm.batch(prompts, 
+                                   config={"max_concurrency": max_concurrency})
     return [item for result in results for item in result.items]
 
 
@@ -54,13 +59,18 @@ def create_message_filter_agent(node_llm,
         if isinstance(messages, ToolMessage):
             messages = messages.content
 
-        message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
+        try:
+            message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
 
-        if not message_texts:
-            return state.model_copy(update={"messages": json.dumps([])})
+            if not message_texts:
+                logger.log("[message_filter_agent] => No meessages passed")
+                return state.model_copy(update={"messages": json.dumps([])})
 
-        all_items = classify_messages(node_llm, prompt_template, message_texts,
-                                       batch_size=batch_size, max_concurrency=max_concurrency)
+            all_items = classify_messages(node_llm, prompt_template, message_texts,
+                                        batch_size=batch_size, max_concurrency=max_concurrency)
+        except Exception as e:
+            logger.error(f'message_filter_agent error : {e}')
+            return state.model_copy(update={"filtered_messages": [], "messages_filtered": False})
 
         # relevant_indices = sorted(
         #     item.index for item in all_items

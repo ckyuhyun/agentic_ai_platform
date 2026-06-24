@@ -23,12 +23,12 @@ class LLM:
         self.llm_instance = self._llm_model_.bind_tools(tools)
 
 
-    def prompt_by_single_prompt(self, 
-                system_human_message:str) -> str:
+    def prompt_by_single_prompt(self,
+                                system_human_message:str) -> str:
         """
         Invoke the LLM with the given system and human messages, and return the response.
         """
-
+        
         response =self.llm_instance.invoke(system_human_message)
         return response    
     
