@@ -13,6 +13,7 @@ import logging
 import sys
 
 from agentic_ai_platform.data.weaviate_property_data import WeaviateProperty
+from agentic_ai_platform.enum.weaviate_status_code import WeaviateStatusCode
 
 
 # /c:/Users/c_kyu/Development/PersonalProject/rag_project/db/weaviate.py
@@ -43,18 +44,18 @@ class WeaviateDB:
         load_dotenv()
 
 
-        self._collection_name = collection_name
+        self._collection_name_ = collection_name
         self._embedded_model = embedded_model
         self._properties_config = None
 
-        self.api_endpoint_host = os.getenv("WEAVIATE_HOST")
-        self.api_endpoint_port = os.getenv("WEAVIATE_PORT")
+        self._api_endpoint_host_ = os.getenv("WEAVIATE_HOST")
+        self._api_endpoint_port_ = os.getenv("WEAVIATE_PORT")
 
         #self.__collection_init__()
 
     @property
     def collection_name(self):
-        return self._collection_name
+        return self._collection_name_
 
     @property
     def embedded_model(self):
@@ -68,7 +69,7 @@ class WeaviateDB:
     @collection_name.setter
     def collection_name(self,
                        value:str):
-        self._collection_name = value
+        self._collection_name_ = value
 
     @embedded_model.setter
     def embedded_model(self,
@@ -86,8 +87,8 @@ class WeaviateDB:
     def db_connected(self) -> bool:
         """Check whether the configured Weaviate instance is reachable."""
         try:
-            with weaviate.connect_to_local(host=self.api_endpoint_host,
-                                           port=self.api_endpoint_port) as client:
+            with weaviate.connect_to_local(host=self._api_endpoint_host_,
+                                           port=self._api_endpoint_port_) as client:
                 return client.is_ready()
         except Exception:
             return False
@@ -106,7 +107,7 @@ class WeaviateDB:
                         Each dict should contain the properties of the object to be added.  
         """        
 
-        if self._collection_name is None:
+        if self._collection_name_ is None:
             raise Exception("collection name not addressed")
         
         if self._properties_config is None:
@@ -114,16 +115,16 @@ class WeaviateDB:
                
             
 
-        with weaviate.connect_to_local(host=self.api_endpoint_host, 
-                                       port=self.api_endpoint_port) as client: 
+        with weaviate.connect_to_local(host=self._api_endpoint_host_, 
+                                       port=self._api_endpoint_port_) as client: 
             
             try:
-                if client.collections.exists(self._collection_name):
-                    client.collections.delete(self._collection_name)
+                if client.collections.exists(self._collection_name_):
+                    client.collections.delete(self._collection_name_)
             except Exception as e:
                 raise Exception(f"Error deleting existing collection: {str(e)}")
 
-            if not client.collections.exists(self._collection_name):
+            if not client.collections.exists(self._collection_name_):
                 wvc_property = []
                 # for p in self._properties:
                 #     wvc_property.append(
@@ -136,8 +137,8 @@ class WeaviateDB:
 
                 try:
                     client.collections.create(
-                        name=self._collection_name,
-                        description=f"Collection for {self._collection_name}",
+                        name=self._collection_name_,
+                        description=f"Collection for {self._collection_name_}",
                         properties=self._properties_config,                        
                         vector_index_config=Configure.VectorIndex.hnsw(
                             distance_metric=VectorDistances.COSINE,
@@ -150,7 +151,7 @@ class WeaviateDB:
                 except Exception as e:
                     raise Exception(f"Error creating collection: {str(e)}")
                 
-            collection_object =  client.collections.get(self._collection_name)
+            collection_object =  client.collections.get(self._collection_name_)
 
             # weaviate_vector_logger = logging.getLogger("langchain_weaviate.vectorstores")
 
@@ -216,13 +217,13 @@ class WeaviateDB:
             
 
     def read_data(self) -> None:
-        if self._collection_name is None:
-            raise Exception("collection name not addressed")
+        if self._collection_name_ is None:
+            return WeaviateStatusCode.NoCollection
         
-        with weaviate.connect_to_local(host=self.api_endpoint_host, 
-                                       port=self.api_endpoint_port) as client:
-            if client.collections.exists(self._collection_name):
-                collection_object =  client.collections.use(self._collection_name)
+        with weaviate.connect_to_local(host=self._api_endpoint_host_, 
+                                       port=self._api_endpoint_port_) as client:
+            if client.collections.exists(self._collection_name_):
+                collection_object =  client.collections.use(self._collection_name_)
                 for item in collection_object.iterator():
                     print("---")
                     print(f"item: {item}")
@@ -231,25 +232,29 @@ class WeaviateDB:
     def search_query(
             self,
             query: str,
-            top_k: int = 5) -> Union[List[Dict], None]:
-
-        if self._collection_name is None:
-                    raise Exception("collection name not addressed")
+            top_k: int = 5) -> Union[List[Dict], WeaviateStatusCode, None]:
         
-        with weaviate.connect_to_local(host=self.api_endpoint_host,
-                                       port=self.api_endpoint_port) as client:
-            if client.collections.exists(self._collection_name):
-                db = self.__get_weaviate_db__(client)
-                return db.similarity_search(query, k=top_k)
-            return None
+        if self._collection_name_ is None:
+            return WeaviateStatusCode.NoCollection
+        
+        with weaviate.connect_to_local(host=self._api_endpoint_host_,
+                                       port=self._api_endpoint_port_) as client:
+            
+            if client.collections.exists(self._collection_name_):
+                try:
+                    db = self.__get_weaviate_db__(client)
+                    return db.similarity_search(query, k=top_k)
+                except Exception as e:
+                    raise(e)
+            return WeaviateStatusCode.NoExistCollection
     
     def delete_collection(self):
-        if self._collection_name is None:
-            raise Exception("collection name not addressed")
+        if self._collection_name_ is None:
+            return WeaviateStatusCode.NoCollection
         
-        with weaviate.connect_to_local(host=self.api_endpoint_host, 
-                                       port=self.api_endpoint_port) as client:
-            client.collections.delete(self._collection_name)
+        with weaviate.connect_to_local(host=self._api_endpoint_host_, 
+                                       port=self._api_endpoint_port_) as client:
+            client.collections.delete(self._collection_name_)
 
     # def __collection_init__(self):
     #         with weaviate.connect_to_local(host=self.api_endpoint_host, 
@@ -266,7 +271,7 @@ class WeaviateDB:
     def __get_weaviate_db__(self,
                          client):
         return WeaviateVectorStore(client,
-                                         index_name=self._collection_name,
+                                         index_name=self._collection_name_,
                                          text_key="text",
                                          embedding=self.embedded_model)      
         

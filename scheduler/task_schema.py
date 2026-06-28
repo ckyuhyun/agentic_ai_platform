@@ -32,7 +32,7 @@ class NodeTask(BaseModel):
     payload: Dict[str, Any] = Field(default_factory=dict, description="Optional node-specific args")
     retry_count: int = Field(default=0, description="Number of retries so far")
     max_retries: int = Field(default=3, description="Max retries before DLQ")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
     status: TaskStatus = Field(default=TaskStatus.PENDING)
 
 
@@ -47,7 +47,7 @@ class NodeExecution(BaseModel):
     status: TaskStatus = Field(description="Execution result status")
     error: Optional[str] = Field(default=None, description="Error message if failed")
     duration_ms: int = Field(description="Execution time in milliseconds")
-    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    executed_at: datetime = Field(default_factory=datetime.now)
 
 
 class GraphRunRequest(BaseModel):

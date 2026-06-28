@@ -116,7 +116,7 @@ class InMemoryCheckpointer(BaseCheckpointer):
     ) -> None:
         """Append event to log."""
         event_copy = event.copy()
-        event_copy["_timestamp"] = datetime.utcnow().isoformat()
+        event_copy["_timestamp"] = datetime.now().isoformat()
         if state_id not in self._events:
             self._events[state_id] = []
         self._events[state_id].append(event_copy)
