@@ -12,7 +12,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 from agentic_ai_platform.data.weaviate_property_data import WeaviateProperty
-from agentic_ai_platform.db.weaviate_db import WeaviateDB
+from agentic_ai_platform.rag_service.weaviate_db import WeaviateDB
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
 from agentic_ai_platform.RAG.embedding import Embeddings
 from agentic_ai_platform.RAG.embedded_model_list import EmbeddingModel

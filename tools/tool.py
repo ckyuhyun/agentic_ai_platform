@@ -4,7 +4,7 @@ from langchain_tavily import TavilySearch
 import json
 
 
-from agentic_ai_platform.db.weaviate_db import WeaviateDB
+from agentic_ai_platform.rag_service.weaviate_db import WeaviateDB
 
 
 _tavily = TavilySearch(max_results=5, topic="news", include_raw_content=False)
