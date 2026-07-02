@@ -36,7 +36,7 @@ from agentic_ai_platform.enum.weaviate_status_code import WeaviateStatusCode
 #         headers.setdefault("X-OpenAI-Api-Key", api_key)
 #     return weaviate.Client(url=url, additional_headers=headers)
 
-class WeaviateDB:
+class WeaviateController:
     def __init__(self,
                  collection_name: Optional[str] = None, 
                  embedded_model: Optional[str] = None):

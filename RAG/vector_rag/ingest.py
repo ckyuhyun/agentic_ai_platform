@@ -12,7 +12,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 from agentic_ai_platform.data.weaviate_property_data import WeaviateProperty
-from agentic_ai_platform.rag_service.weaviate_db import WeaviateDB
+from agentic_ai_platform.docker_services.rag_service.weaviate_controller import WeaviateController
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
 from agentic_ai_platform.RAG.embedding import Embeddings
 from agentic_ai_platform.RAG.embedded_model_list import EmbeddingModel
@@ -84,7 +84,7 @@ class Ingest:
                 embed = Embeddings(internal_embedding_model=True,
                     embedding_model= None)
                         
-                weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name, 
+                weaviate_db = WeaviateController(collection_name=self.vector_db_collection_name, 
                                          embedded_model=embed.get_auto_decided_embedding_model())
                 
                 
@@ -182,7 +182,7 @@ class Ingest:
         """
         Builds a vector store in Weaviate from the embedding documents.
         """
-        weaviate_db = WeaviateDB(collection_name=self.vector_db_collection_name,
+        weaviate_db = WeaviateController(collection_name=self.vector_db_collection_name,
                                  embedded_model=embedded_model)
         
     

@@ -1,11 +1,17 @@
+import os
+from dotenv import load_dotenv
 from agentic_ai_platform.data.weaviate_property_data import WeaviateProperty
-from agentic_ai_platform.db.postgres import PostgresDB
+from agentic_ai_platform.docker_services.postgres_service.postgres import PostgresDB
 from agentic_ai_platform import weaviate
 
 class DBSync:
     def __init__(self):
-        self.postgresDB = PostgresDB(host='localhost',
-                                port=5433)
+        load_dotenv()
+
+        postgresdb_host = os.getenv("POSTGRES_HOST")
+        postgresdb_port = int(os.getenv("POSTGRES_POST"))
+        self.postgresDB = PostgresDB(host=postgresdb_host,
+                                port=postgresdb_port)
         
         
 
