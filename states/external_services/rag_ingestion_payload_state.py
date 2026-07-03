@@ -1,8 +1,10 @@
 
 from pydantic import BaseModel
+import uuid
 
 
 class RAGIngestionPayloadState(BaseModel):
-    content: str
-    session_id: str
-    project_id: str
+    data: str
+    event_id: uuid.UUID
+    session_id: uuid.UUID
+    project_id: uuid.UUID

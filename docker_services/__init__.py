@@ -1,3 +1,0 @@
-from agentic_ai_platform.docker_services.rag_service.weaviate_controller import WeaviateController
-
-weaviate = WeaviateController()

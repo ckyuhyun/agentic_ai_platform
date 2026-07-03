@@ -130,9 +130,9 @@ services:
       restart: unless-stopped        
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16
     environment:
-      - POSTGRES_DB=agnetic_ai_db
+      - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
