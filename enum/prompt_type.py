@@ -1,5 +1,3 @@
-
-from typing import Literal
 from enum import Enum
 
 class PromptType(str, Enum):
