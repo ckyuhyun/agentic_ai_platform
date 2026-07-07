@@ -87,35 +87,35 @@ services:
     command: redis-server --requirepass ${Redis_Password}
     restart: unless-stopped
 
-  weaviate:
-    command:
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-      - --scheme
-      - http
-    image: cr.weaviate.io/semitechnologies/weaviate:latest
-    container_name: weaviate_db
-    ports:
-      - "8080:8080"
-      - "50051:50051"
-    volumes:
-      - weaviate_data:/var/lib/weaviate
-    restart: unless-stopped
-    environment:
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
-      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
-      DEFAULT_VECTORIZER_MODULE: "text2vec-openai"
-      # Trick the OpenAI module into hitting our local TEI container
-      OPENAI_APIKEY: ""
-      ENABLE_MODULES: "text2vec-openai"
-      CLUSTER_HOSTNAME: "node1"
-      #OLLAMA_API_ENDPOINT: "http://ollama:11434"
-      API_ENDPOINT : "0.0.0.0:8000"
-    depends_on:
-      vllm-engine:
-        condition: service_healthy
+  # weaviate:
+  #   command:
+  #     - --host
+  #     - 0.0.0.0
+  #     - --port
+  #     - "8080"
+  #     - --scheme
+  #     - http
+  #   image: cr.weaviate.io/semitechnologies/weaviate:latest
+  #   container_name: weaviate_db
+  #   ports:
+  #     - "8080:8080"
+  #     - "50051:50051"
+  #   volumes:
+  #     - weaviate_data:/var/lib/weaviate
+  #   restart: unless-stopped
+  #   environment:
+  #     AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+  #     PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+  #     DEFAULT_VECTORIZER_MODULE: "text2vec-openai"
+  #     # Trick the OpenAI module into hitting our local TEI container
+  #     OPENAI_APIKEY: ""
+  #     ENABLE_MODULES: "text2vec-openai"
+  #     CLUSTER_HOSTNAME: "node1"
+  #     #OLLAMA_API_ENDPOINT: "http://ollama:11434"
+  #     API_ENDPOINT : "0.0.0.0:8000"
+  #   depends_on:
+  #     vllm-engine:
+  #       condition: service_healthy
 
   tei-embedding-engine:
       image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest # Native CPU optimization
@@ -130,22 +130,61 @@ services:
       restart: unless-stopped        
 
   postgres:
-    image: postgres:16
+    #image: postgres:16
+    image: pgvector/pgvector:0.7.0-pg16
+    container_name: postgres
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=admin
+      - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
       - "5433:5432"
     volumes:    
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER}"]
+      interval: 10s 
+      timeout: 10s
+      retries: 5
+      start_period: 10s
     depends_on:
       vllm-engine:
         condition: service_healthy
 
+
+  pgai-initializer:
+    image: timescale/pgai-vectorizer-worker:latest
+    container_name: pgai_init_script
+    entrypoint: python
+    command: -m pgai install -d postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+
+  # The worker container that handles the CPU/Network heavy async embedding tasks
+  vectorizer-worker:
+    image: timescale/pgai-vectorizer-worker:latest
+    container_name: pgai_vector_worker
+    environment:
+      PGAI_VECTORIZER_WORKER_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # If using external cloud providers:
+      # OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # If using a local Ollama container in the same network:
+      OPENAI_BASE_URL: http://tei-server:80/v1
+      OPENAI_API_KEY: "not-needed-for-local-tei"
+
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgai-initializer:
+        condition: service_completed_successfully
+
+
 volumes:
-  weaviate_data:
+  #weaviate_data:
   tei_data:
   vllm_data:
   redis_data:
