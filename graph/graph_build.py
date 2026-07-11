@@ -22,12 +22,14 @@ StreamMode = Literal["values", "messages", "custom", "updates"]
 
 class GraphBuild:
     def __init__(self, 
+                 project_name: str = None,
                  enabled_persistentMemory=True):
         self.app = None
         self.config: Optional[RunnableConfig] = None
         self.enabled_persistentMemory = enabled_persistentMemory
 
         load_dotenv()
+        self.config["metadata"] = {"run_name": project_name if project_name else os.getenv("LANGSMITH_PROJECT")}
         self.langsmith_thread_id = os.getenv("LANGSMITH_THREAD_ID")
 
     def run_graph(
