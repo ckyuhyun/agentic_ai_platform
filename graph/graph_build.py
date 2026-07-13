@@ -29,7 +29,7 @@ class GraphBuild:
         self.enabled_persistentMemory = enabled_persistentMemory
 
         load_dotenv()
-        self.config["metadata"] = {"run_name": project_name if project_name else os.getenv("LANGSMITH_PROJECT")}
+        self.config["metadata"]["project_name"] = project_name if project_name else os.getenv("LANGSMITH_PROJECT")
         self.langsmith_thread_id = os.getenv("LANGSMITH_THREAD_ID")
 
     def run_graph(
@@ -113,7 +113,7 @@ class GraphBuild:
         if not node_traces:
             return
         ls = LangSmithClient()
-        project = (self.config or {}).get("metadata", {}).get("run_name", "default")
+        project = (self.config or {}).get("metadata", {}).get("project_name", "default")
         runs = list(ls.list_runs(project_name=project, limit=1, is_root=True))
         if runs:
             post_trace(str(runs[0].id), node_traces)

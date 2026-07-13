@@ -43,17 +43,20 @@ class LLM:
 
 
     def invoke_by_single_prompt(self,
-                                system_human_message:str) -> str:
+                                system_human_message:str,
+                                config : dict = None) -> str:
         """
         Invoke the LLM with the given system and human messages, and return the response.
         """
         
-        response =self.llm_instance.invoke(system_human_message)
+        response =self.llm_instance.invoke(system_human_message, 
+                                           config=config)
         return response    
     
     def invoke(self, 
              system_message: str = None,
-             human_message: str = None) -> str:
+             human_message: str = None,
+             config : dict = None) -> str:
         """
         Invoke the LLM with the given system and human messages, and return the response.
         """
@@ -64,7 +67,8 @@ class LLM:
         if human_message:
             message.append(HumanMessage(content=human_message))
 
-        response =self.llm_instance.invoke(message)
+        response =self.llm_instance.invoke(message,
+                                           config=config)
         return response
     
     def _llm_model_init_(self):
