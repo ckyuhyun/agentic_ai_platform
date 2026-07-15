@@ -12,8 +12,8 @@ from agentic_ai_platform.states.tool_state import ToolState
 
 class NodeTrace(BaseModel):
     """Execution record written by each node for trace-based evaluation."""
-    node: str            = Field(description="Node name (drafter / grader)")
-    iteration: int       = Field(description="Draft/critique cycle index")
+    node: str            = Field(description="Node name")
+    iteration: int       = Field(description="recycle index of node calling")
     started_at: float    = Field(default_factory=time.time)
     latency_ms: float    = Field(default=0.0)
     model: str           = Field(default="")
@@ -22,13 +22,16 @@ class NodeTrace(BaseModel):
     score: Optional[float]       = Field(default=None)
     approved: Optional[bool]     = Field(default=None)
     issue_count: Optional[int]   = Field(default=None)
-
+ 
     @staticmethod
-    def start(node: str, iteration: int, model: str = "") -> "NodeTrace":
+    def start(node: str, 
+              iteration: int, 
+              model: str = "") -> "NodeTrace":
         return NodeTrace(node=node, iteration=iteration, model=model)    
     
 
-    def finish(self, **kwargs) -> "NodeTrace":
+    def finish(self, 
+               **kwargs) -> "NodeTrace":
         self.latency_ms = (time.time() - self.started_at) * 1000
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -51,7 +54,7 @@ class CriticFeedback(BaseModel):
 class DraftConfig(BaseModel):
     """Configuration parameters for the drafting process. and allowing writign once"""
     max_iterations: int = Field(default=3, description="Maximum number of draft/critique cycles before forcing acceptance")
-    approval_threshold: float = Field(default=0.8, description="Minimum critic score required for approval")
+    approval_threshold: float = Field(default=0.8, description="Minimum critic score required for approval")    
 
     # _initialized: bool = False 
     # @model_validator(mode="after")
@@ -65,7 +68,21 @@ class DraftConfig(BaseModel):
 class AbstractSuperviseState(BaseModel):
     messages_filtered : bool = Field(
         default=False, description="if the slack messages filtered out to remove unnecessary messages, return True")
+
+    # Observability/eval identifiers, set once when the run starts and carried
+    # unchanged through every node so LLM calls, tool calls, and stored records
+    # can be grouped and replayed by run.
+    state_id: Optional[str] = Field(
+        default=None, description="Id of this graph run (== LangGraph/scheduler thread id)")
+    session_id: Optional[str] = Field(
+        default=None, description="Business-level grouping id (defaults to state_id; distinct when multiple runs belong to one session)")
+    # LangGraph message history
+    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
     
+    # Trace-based evaluation records
+    node_traces: List[NodeTrace] = Field(
+        default_factory=list, description="Per-node execution traces for evaluation")
+
 
 
 class SuperviseState(AbstractSuperviseState):
@@ -103,9 +120,8 @@ class SuperviseState(AbstractSuperviseState):
     final_output: Optional[str] = Field(
         default=None, description="The accepted draft")
 
-    # LangGraph message history
-    messages: Annotated[list[AnyMessage], add_messages] = Field(
-        default_factory=list)
+    
+
 
     # Cursor into `messages` marking how many have been consumed by downstream
     # agents (e.g. rewrite_query_agent picking up new human_review answers).
@@ -116,6 +132,4 @@ class SuperviseState(AbstractSuperviseState):
     plan : PlanState = Field(
         default_factory=PlanState, description="planning for execution")
 
-    # Trace-based evaluation records
-    node_traces: List[NodeTrace] = Field(
-        default_factory=list, description="Per-node execution traces for evaluation")
+

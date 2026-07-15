@@ -58,6 +58,10 @@ class GraphRunRequest(BaseModel):
         default=None,
         description="Optional run ID; if None, generates UUID"
     )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Optional business-level grouping id; defaults to run_id when not given"
+    )
     distributed: bool = Field(
         default=False,
         description="If True, use distributed scheduler; if False, run locally"

@@ -58,14 +58,19 @@ class Scheduler:
             GraphRunResponse with state_id and status
         """
         state_id = request.run_id or str(uuid4())
-        self.logger.info(f"Starting run: state_id={state_id}, query={request.query}")
+        session_id = request.session_id or state_id
+        self.logger.info(f"Starting run: state_id={state_id}, session_id={session_id}, query={request.query}")
 
         # Persist initial state as simple serializable state dict.
         # Downstream node functions may normalize this into a SuperviseState model as needed.
+        # state_id/session_id are carried through every node so LLM calls, tool calls,
+        # and stored records can be grouped and replayed by run (see build_llm_config).
         initial_state = {
             "query": request.query,
             "tool_states": [],
             "messages": [],
+            "state_id": state_id,
+            "session_id": session_id,
         }
 
         # Persist initial snapshot
