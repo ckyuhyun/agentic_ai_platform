@@ -27,8 +27,8 @@ def create_drafter_agent(schema: Type[BaseModel],
                 Default is DraftState, but you can use a custom model as long as it has those fields.
     """
     def drafter_node(state: SuperviseState) -> SuperviseState:
-        trace = NodeTrace.start(node="drafter", iteration=state.iteration, model="llama3.1")
 
+        trace = NodeTrace.start(node="drafter", iteration=state.iteration, model="llama3.1")
         messages = []
         messages.append(SystemMessage(content=state.system_prompt or ""))
 

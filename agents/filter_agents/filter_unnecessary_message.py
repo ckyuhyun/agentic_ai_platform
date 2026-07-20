@@ -24,9 +24,6 @@ def classify_messages(node_llm,
     (global) index into message_texts.
     """
 
-    if not message_texts:
-        return []
-
     chunks = [message_texts[i:i + batch_size] for i in range(0, len(message_texts), batch_size)]
 
     prompts = []
@@ -66,7 +63,8 @@ def create_message_filter_agent(node_llm,
 
             if not message_texts:
                 logger.info("[message_filter_agent] => No meessages passed")
-                return state.model_copy(update={"messages": json.dumps([])})
+                return state.model_copy(update={"messages": json.dumps([]),
+                                                "messages_filtered":True})
 
             all_items = classify_messages(node_llm, prompt_template, message_texts,
                                         batch_size=batch_size, max_concurrency=max_concurrency)
@@ -82,7 +80,8 @@ def create_message_filter_agent(node_llm,
 
         filtered = FilterMessageBatchState(items=all_items)
         
-        return state.model_copy(update={"filtered_messages": filtered, "messages_filtered": True})
+        return state.model_copy(update={"filtered_messages": filtered, 
+                                        "messages_filtered": True})
         
 
     return message_filter_agent

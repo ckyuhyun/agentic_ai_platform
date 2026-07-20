@@ -7,6 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain.chat_models import init_chat_model
 
 
+
 # Opt-in alias -> actual model id served by the local vllm-engine container
 # (see agentic_ai_platform/docker-compose.yml). Pass model_name="qwen2.5-local"
 # to route through it instead of Claude/Ollama.
@@ -48,10 +49,11 @@ class LLM:
         """
         Invoke the LLM with the given system and human messages, and return the response.
         """
-        
         response =self.llm_instance.invoke(system_human_message, 
-                                           config=config)
+                                        config=config)
+        
         return response    
+        
     
     def invoke(self, 
              system_message: str = None,

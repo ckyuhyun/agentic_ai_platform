@@ -72,10 +72,19 @@ class AbstractSuperviseState(BaseModel):
     # Observability/eval identifiers, set once when the run starts and carried
     # unchanged through every node so LLM calls, tool calls, and stored records
     # can be grouped and replayed by run.
-    state_id: Optional[str] = Field(
-        default=None, description="Id of this graph run (== LangGraph/scheduler thread id)")
-    session_id: Optional[str] = Field(
-        default=None, description="Business-level grouping id (defaults to state_id; distinct when multiple runs belong to one session)")
+    thread_id :Optional[str] = Field(
+         default=None, description="Thread Id of this graph runthread id")
+    
+    # state_id: Optional[str] = Field(
+    #     default=None, description="Id of this graph run (== LangGraph/scheduler thread id)")
+    
+    # session_id: Optional[str] = Field(
+    #     default=None, description="Business-level grouping id (defaults to state_id; distinct when multiple runs belong to one session)")
+    
+        
+    iteration: int = Field(
+        default=0, description="Number of draft/critique cycles completed")
+    
     # LangGraph message history
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
     
@@ -111,9 +120,7 @@ class SuperviseState(AbstractSuperviseState):
     # Loop control
     graph_config : DraftConfig = Field(
         default_factory=DraftConfig, description="Configuration for the drafting process")
-    
-    iteration: int = Field(
-        default=0, description="Number of draft/critique cycles completed")
+
     
 
     # Final result — set when critic approves or max_iterations reached

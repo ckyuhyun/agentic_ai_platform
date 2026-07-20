@@ -1,4 +1,6 @@
+import json
 import os
+import uuid
 
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
@@ -22,35 +24,29 @@ StreamMode = Literal["values", "messages", "custom", "updates"]
 
 class GraphBuild:
     def __init__(self, 
-                 project_name: str = None,
                  enabled_persistentMemory=True):
         self.app = None
-        self.config: Optional[RunnableConfig] = None
         self.enabled_persistentMemory = enabled_persistentMemory
-
+        self.config : Optional[RunnableConfig] = None
         load_dotenv()
-        self.config["metadata"]["project_name"] = project_name if project_name else os.getenv("LANGSMITH_PROJECT")
-        self.langsmith_thread_id = os.getenv("LANGSMITH_THREAD_ID")
+        
 
-    def run_graph(
+    def stream_run_graph(
         self,
         graph: StateGraph,
         init_state: Any,
+        config : Optional[RunnableConfig],
         stream_mode: StreamMode = "values",
     ):
+        self.config = config
+
         checkpoints = InMemorySaver()
+
         if self.enabled_persistentMemory:
             self.app = graph.compile(checkpointer=checkpoints)
         else:
             self.app = graph.compile()
-
-        self.config = {
-            "configurable": {"thread_id": self.langsmith_thread_id},
-            #"metadata" : {"run_name": "LLM_service", "task": str(init_state.task)}
-            "metadata" : {"run_name": "LLM_service"}
-            }
-
-
+      
         try:
             for chunk in self.app.stream(init_state,
                                         config=self.config,
@@ -112,11 +108,25 @@ class GraphBuild:
         node_traces = snapshot.values.get("node_traces", [])
         if not node_traces:
             return
+        thread_id = (self.config or {}).get("configurable", {}).get("thread_id")
+        if not thread_id:
+            return
         ls = LangSmithClient()
-        project = (self.config or {}).get("metadata", {}).get("project_name", "default")
-        runs = list(ls.list_runs(project_name=project, limit=1, is_root=True))
+        
+        # LangGraph propagates configurable.thread_id into every run's metadata
+        # (see langgraph._internal._config._PROPAGATE_TO_METADATA), so filtering
+        # the root run on it identifies *this* run instead of the project's
+        # most-recently-created root run, which could belong to a different call.
+        metadata_filter = json.dumps({"thread_id": thread_id})
+        runs = list(ls.list_runs(
+            is_root=True,
+            #filter=f"has(metadata, '{metadata_filter}')",
+            limit=1,
+        ))
         if runs:
-            post_trace(str(runs[0].id), node_traces)
+            post_trace(
+                run_name=str(runs[0].id),
+                node_trace= node_traces)
 
     # ── state access ──────────────────────────────────────────────────────────
 

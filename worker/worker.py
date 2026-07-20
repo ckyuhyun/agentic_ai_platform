@@ -1,8 +1,10 @@
 """Worker that executes graph node tasks."""
 
-import json
+
 import logging
 import time
+import os
+from dotenv import load_dotenv
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 
@@ -13,7 +15,15 @@ from agentic_ai_platform.scheduler.task_schema import (
 )
 from agentic_ai_platform.storage.checkpointer import BaseCheckpointer, InMemoryCheckpointer
 
+try:
+    from agentic_ai_platform.eval.langsmith.note_trace import post_trace
+    from langsmith import Client as LangSmithClient
+    LANGSMITH_AVAILABLE = True
+except Exception:
+    LANGSMITH_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 class Worker:
 
@@ -166,11 +176,15 @@ class LocalWorker:
 
     def __init__(
         self,
+        project_name : str,
         checkpointer: Optional[BaseCheckpointer] = None,
         node_registry: Optional[Dict[str, Any]] = None,
         graph_edges: Optional[Dict[str, List[str]]] = None,
     ):
-        self.worker = Worker(checkpointer, node_registry)
+        self.worker = Worker(checkpointer=checkpointer, 
+                             node_registry=node_registry)
+        
+        self.project_name =  project_name
         self.graph_edges = graph_edges or {}
         self.logger = logger
 
@@ -205,7 +219,8 @@ class LocalWorker:
                 next_nodes = self.graph_edges.get(task.node_name, [])(snapshot)
                 
                 if next_nodes[0] == "end":
-                    self.logger.info('All Task ends')                    
+                    self._post_traces_to_langsmith(task.state_id)
+                    self.logger.info('### All Task ends ###')
 
                 elif next_nodes:
                     next_version = snapshot.get("_version", 0) if snapshot else task.snapshot_version + 1
@@ -217,3 +232,24 @@ class LocalWorker:
                         ))
 
             iteration += 1
+
+
+    def _post_traces_to_langsmith(self, 
+                                  state_id):
+        snapshot = self.worker.checkpointer.get_snapshot(state_id)
+        if not snapshot:
+            return
+        node_traces = snapshot.get("node_traces", [])
+        if not node_traces:
+            return
+        ls = LangSmithClient()
+        project = self.project_name
+
+        variable = os.getenv("LANGSMITH_PROJECT")
+
+        if not ls.has_project(project_name=project):
+            ls.create_project(project_name=project)
+        
+        runs = list(ls.list_runs(project_name=project, limit=1, is_root=True))
+        if runs:
+            post_trace(str(runs[0].id), node_traces)
