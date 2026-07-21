@@ -80,7 +80,7 @@ def create_message_filter_agent(node_llm,
 
         filtered = FilterMessageBatchState(items=all_items)
         
-        return state.model_copy(update={"filtered_messages": filtered, 
+        return state.model_copy(update={"filtered_message": filtered, 
                                         "messages_filtered": True})
         
 

@@ -8,6 +8,7 @@ from agentic_ai_platform.states.hallucination_signal_state import HallucinationC
 from agentic_ai_platform.states.plan_state import PlanState
 from agentic_ai_platform.states.queryState import QueryState
 from agentic_ai_platform.states.tool_state import ToolState
+from track_issue_system.State.filter_message_state import FilterMessageBatchState
 
 
 class NodeTrace(BaseModel):
@@ -91,6 +92,8 @@ class AbstractSuperviseState(BaseModel):
     # Trace-based evaluation records
     node_traces: List[NodeTrace] = Field(
         default_factory=list, description="Per-node execution traces for evaluation")
+    
+    filtered_message : FilterMessageBatchState = Field(default = None,  description="filtered message with different aspect - blacklist, hallucination, safty etc")
 
 
 
