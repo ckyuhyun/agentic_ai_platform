@@ -1,16 +1,12 @@
-
-
 from langchain.messages import ToolMessage
 import json
 from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate
+from agentic_ai_platform import logger
+from agentic_ai_platform.states.filter_message_state import FilterMessageBatchState, FilterMessageItem
 
-from track_issue_system.State.filter_message_state import FilterMessageBatchState, FilterMessageItem
 
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def classify_messages(node_llm,

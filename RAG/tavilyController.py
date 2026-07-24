@@ -11,8 +11,9 @@ from langchain_community.document_loaders import RecursiveUrlLoader
 from RAG.deep_article_scraper import DeepArticleScraper, ArticleContent
 import logging
 from bs4 import BeautifulSoup as Soup
+from agentic_ai_platform import logger
 
-logger = logging.getLogger(__name__)
+
 
 class TavilyController:
     def __init__(self, enable_deep_scraping: bool = False):

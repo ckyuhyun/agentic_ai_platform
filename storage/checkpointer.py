@@ -5,8 +5,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from datetime import datetime
+from agentic_ai_platform import logger
 
-logger = logging.getLogger(__name__)
 
 
 class BaseCheckpointer(ABC):

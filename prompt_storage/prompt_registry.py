@@ -1,40 +1,21 @@
-"""
-PromptRegistry — versioned prompt management.
-
-Prompts are registered under a (prompt_type, version) key.
-The registry tracks which version is active per type and lets you
-compare, promote, and roll back versions at runtime.
-
-Usage:
-    registry = PromptRegistry()
-
-    # register versions
-    registry.register("critic", "v1", "You are a strict critic...")
-    registry.register("critic", "v2", "You are a strict but fair critic. Be concise.")
-
-    # set active version
-    registry.set_active("critic", "v2")
-
-    # retrieve active prompt
-    prompt = registry.get("critic")          # → PromptVersion for v2
-    messages = prompt.as_messages()          # → [SystemMessage(...)]
-
-    # compare two versions
-    registry.diff("critic", "v1", "v2")
-"""
-
-from __future__ import annotations
-
-import difflib
+import os
+from dotenv import load_dotenv
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Literal, Optional, Tuple, get_args
+from typing import Callable, Dict, List, Literal, Optional, Tuple, get_args
 
 from langchain_core.messages import SystemMessage
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate
+from langsmith import Client
+from langsmith.prompt_cache import configure_global_prompt_cache
+from langsmith.utils import LangSmithConflictError
 
 from agentic_ai_platform.enum.prompt_type import PromptType
+from agentic_ai_platform import logger
 
 
+
+load_dotenv()
 
 @dataclass
 class SystemPromptVersion:
@@ -61,10 +42,122 @@ class SystemPromptVersion:
 
 
 class PromptRegistry:
+    """
+    PromptRegistry — versioned prompt management.
+
+    Prompts are registered under a (prompt_type, version) key.
+    The registry tracks which version is active per type and lets you
+    compare, promote, and roll back versions at runtime.
+
+    Usage:
+        registry = PromptRegistry()
+
+        # register versions
+        registry.register("critic", "v1", "You are a strict critic...")
+        registry.register("critic", "v2", "You are a strict but fair critic. Be concise.")
+
+        # set active version
+        registry.set_active("critic", "v2")
+
+        # retrieve active prompt
+        prompt = registry.get("critic")          # → PromptVersion for v2
+        messages = prompt.as_messages()          # → [SystemMessage(...)]
+
+        # compare two versions
+        registry.diff("critic", "v1", "v2")
+    """
+
     def __init__(self):
-        self.prompts_storage: Dict[str, List[SystemPromptVersion]] = {}
+
+        self.is_register_to_langsmith = os.getenv("LANGSMITH_Prompt_Update").lower() == "true"
+        self.prompts_storage: Dict[str, List[SystemPromptVersion]] = {}        
+        self.prompt_id : str
+        self.register_func: Callable[[PromptType, str, str, str, Optional[List[str]]], None] = None
+        self.getprompt_func : Callable[[PromptType, Optional[str],  Optional[List[str]]], SystemPromptVersion] = None
+        self.smith_client = Client()
 
     def register(self,
+                 prompt_type: PromptType,
+                 version_id: str,
+                 promptTempate : ChatPromptTemplate ,
+                 description: str = "",
+                 tags: Optional[List[str]]= []) -> None:
+
+        
+        if self.is_register_to_langsmith:
+            self.register_func = self.__register_to_langsmith__
+            
+        else:
+            self.register_func = self.__register_to_local__
+            
+        system_prompt : str = next( (m for m in promptTempate.messages if isinstance(m, SystemMessagePromptTemplate)), 
+                             None
+                            ).prompt.template
+            
+        self.register_func(prompt_type=prompt_type,
+                                version_id=version_id,
+                                prompt=system_prompt,
+                                description=description,
+                                tags=tags)
+        
+
+    def register_with_str_prompt(self,
+                 prompt_type: PromptType,
+                 version_id: str,
+                 prompt: str,
+                 description: str = "",
+                 tags: Optional[List[str]]= []) -> None:
+        """
+        register the prompt either to local or langsmith 
+        """
+        if self.is_register_to_langsmith:
+            self.register_func = self.__register_to_langsmith__
+        else:
+            self.register_func = self.__register_to_local__
+            
+        self.register_func(prompt_type=prompt_type,
+                            version_id=version_id,
+                            prompt=prompt,
+                            description=description,
+                            tags=tags)
+
+    def get_prompt(self,
+                   prompt_type: PromptType,
+                   version_id: Optional[str] = None,
+                   tags: Optional[List[str]] = None) -> SystemPromptVersion:
+        if self.is_register_to_langsmith:
+            self.getprompt_func = self.__get_prompt_from_langsmith__
+        else:
+            self.getprompt_func = self.__get_prompt_by_type_version_tags__
+
+        return self.getprompt_func(prompt_type, 
+                                   version_id,
+                                   tags)
+
+
+    def __register_to_langsmith__(self,
+                              prompt_type: PromptType,
+                              version_id: str,
+                            prompt: str,
+                            description: str = "",
+                            tags: Optional[List[str]]= []) -> None:
+        """
+        parameters:
+        - prompt : only system prompt allowed
+        """
+
+        prompt_id = self.__get_prompt_id__()
+
+        #if not ls._prompt_exists(prompt_id):
+        try:
+            prompt_template = ChatPromptTemplate.from_messages([("system" , prompt)])
+            result = self.smith_client.push_prompt(prompt_id, object = prompt_template)
+        except LangSmithConflictError as e:
+            logger.info("This prompt is already the latest prompt")
+        
+        
+
+    def __register_to_local__(self,
                  prompt_type: PromptType,
                  version_id: str,
                  prompt: str,
@@ -84,9 +177,23 @@ class PromptRegistry:
             raise ValueError(f"Failed to register prompt version: {prompt_type} {version_id}")
             
         
-        
+    def __get_prompt_from_langsmith__(self,
+                                      prompt_type: PromptType,
+                                      version_id: Optional[str] = None,
+                                      tags: Optional[List[str]] = None) -> SystemPromptVersion:
+        fetched_prompt = self.smith_client.pull_prompt(self.__get_prompt_id__())
+        system_prompt = next(
+            (m for m in fetched_prompt.messages if isinstance(m, SystemMessagePromptTemplate)), 
+            None
+        ).prompt.template
+        return SystemPromptVersion(
+            prompt_type=prompt_type,
+            version_id=version_id,
+            tags=tags,
+            system_prompt=system_prompt
+        )
 
-    def get_prompt_by_type_version_tags(self,
+    def __get_prompt_by_type_version_tags__(self,
                     prompt_type: PromptType,
                     version_id: Optional[str] = None,
                     tags: Optional[List[str]] = None) -> SystemPromptVersion:
@@ -123,13 +230,15 @@ class PromptRegistry:
                 self.prompts_storage[prompt_type][version_id].description = description
                 self.prompts_storage[prompt_type][version_id].updated_at = datetime.now(timezone.utc)
             else:
-                self.register(prompt_type, version_id, content, description)
+                self.__register_to_local__(prompt_type, version_id, content, description)
 
         except:
             raise ValueError(f"Failed to update prompt version: {prompt_type} {version_id}")
         
     
         
+    def __get_prompt_id__(self):
+        return "planner_track_system"
     
 
         

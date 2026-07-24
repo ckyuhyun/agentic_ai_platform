@@ -14,6 +14,7 @@ from agentic_ai_platform.scheduler.task_schema import (
     TaskStatus,
 )
 from agentic_ai_platform.storage.checkpointer import BaseCheckpointer, InMemoryCheckpointer
+from agentic_ai_platform import logger
 
 try:
     from agentic_ai_platform.eval.langsmith.note_trace import post_trace
@@ -22,7 +23,7 @@ try:
 except Exception:
     LANGSMITH_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 class Worker:
@@ -45,7 +46,7 @@ class Worker:
         """
         self.checkpointer = checkpointer or InMemoryCheckpointer()
         self.node_registry = node_registry or {}
-        self.logger = logger
+        
 
     def execute_task(self, task: NodeTask) -> tuple[bool, Optional[str]]:
         """
@@ -61,7 +62,7 @@ class Worker:
         node_name = task.node_name
         task_id = task.task_id
 
-        self.logger.info(
+        logger.info(
             f"Executing task: task_id={task_id}, state_id={state_id}, node={node_name}"
         )
 
@@ -85,7 +86,7 @@ class Worker:
                     event.get("task_id") == task_id
                     and event.get("type") == "node_execution"
                 ):
-                    self.logger.info(
+                    logger.info(
                         f"Task {task_id} already executed; skipping (idempotent)"
                     )
                     return True, None
@@ -129,7 +130,7 @@ class Worker:
                     "duration_ms": duration_ms,
                 }
                 self.checkpointer.append_event(state_id, execution_record)
-                self.logger.info(
+                logger.info(
                     f"Task {task_id} completed in {duration_ms}ms; "
                     f"state version bumped from {snapshot_version_before} to {snapshot_version_after}"
                 )
@@ -203,7 +204,7 @@ class LocalWorker:
         iteration = 0
         while task_queue and (max_iterations is None or iteration < max_iterations):
             task = task_queue.pop(0)
-            self.logger.info(
+            logger.info(
                 f"[LocalWorker] Processing task {iteration + 1}: {task.task_id}"
             )
 
@@ -214,13 +215,13 @@ class LocalWorker:
                 self.logger.error(f"Task failed: {error}")
                 # Optionally: re-queue with backoff or send to DLQ
             else:
-                self.logger.info(f"Task succeeded")
+                logger.info(f"Task succeeded")
                 snapshot = self.worker.checkpointer.get_snapshot(task.state_id)
                 next_nodes = self.graph_edges.get(task.node_name, [])(snapshot)
                 
                 if next_nodes[0] == "end":
                     self._post_traces_to_langsmith(task.state_id)
-                    self.logger.info('### All Task ends ###')
+                    logger.info('### All Task ends ###')
 
                 elif next_nodes:
                     next_version = snapshot.get("_version", 0) if snapshot else task.snapshot_version + 1

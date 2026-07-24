@@ -20,7 +20,7 @@ def HallucinationsJudge(schema : Type[BaseModel],
         
     def hallucination_safeguide(_draft: str) -> HallucinationSignal:
         logs = []
-        prompt  = prompt_hub.get_prompt_by_type_version_tags(
+        prompt  = prompt_hub.get_prompt(
             prompt_type="hallucination_checker",
             version_id=hallucination_system_prompt_version_id
         )

@@ -13,8 +13,8 @@ from agentic_ai_platform.scheduler.task_schema import (
     TaskStatus,
 )
 from agentic_ai_platform.storage.checkpointer import BaseCheckpointer, InMemoryCheckpointer
+from agentic_ai_platform import logger
 
-logger = logging.getLogger(__name__)
 
 
 class Scheduler:

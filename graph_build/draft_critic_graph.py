@@ -14,6 +14,7 @@ from agentic_ai_platform.tools.grader_tools import EvalsTools
 from agentic_ai_platform.llm.llm import LLM
 from agentic_ai_platform.tools.tool import Tools
 from agentic_ai_platform import prompt_hub
+from agentic_ai_platform.enum.prompt_type import PromptType
 
 
 
@@ -65,8 +66,8 @@ def build_drafter_critic_graph():
     """
     Build graph
     """
-    plan_system_prompt = prompt_hub.get_prompt_by_type_version_tags(prompt_type="planner", 
-                                                                    version_id="0").as_system_messages()
+    plan_system_prompt = prompt_hub.get_prompt(prompt_type=PromptType.PLANNER, 
+                                               version_id="0").as_system_messages()
     plan_agent = create_planner_agent(schema=PlanState,
                                       system_prompt=plan_system_prompt,
                                       graph_llm=LLM("llama3.1").llm_instance)
@@ -77,8 +78,8 @@ def build_drafter_critic_graph():
                                          tools=[Tools.search_rag, Tools.search_web])
     
     
-    critic_prompt = prompt_hub.get_prompt_by_type_version_tags(prompt_type="critic", 
-                                                               version_id="0").as_system_messages()
+    critic_prompt = prompt_hub.get_prompt(prompt_type=PromptType.CRITIC, 
+                                          version_id="0").as_system_messages()
     critic_agent = create_grader_agent(CriticFeedback,
                                       system_prompt=critic_prompt,
                                       eval_tools=[EvalsTools.check_hallucinations],
