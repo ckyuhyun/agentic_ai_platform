@@ -30,15 +30,16 @@ class LLM:
 
     def bind_tools(self,
                    tools: list,
-                   tool_choice: str = None):
+                   tool_required: bool = False):
         """Bind tools to the LLM so it can call them during inference.
 
         tool_choice="required" forces the model to emit a tool call instead of
         a freeform text response (supported by OpenAI-compatible endpoints,
         including vLLM with --enable-auto-tool-choice).
         """
-        if tool_choice is not None:
-            self.llm_instance = self._llm_model_.bind_tools(tools, tool_choice=tool_choice)
+        
+        if tool_required:
+            self.llm_instance = self._llm_model_.bind_tools(tools, tool_choice="required")
         else:
             self.llm_instance = self._llm_model_.bind_tools(tools)
 

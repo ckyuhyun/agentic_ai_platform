@@ -10,6 +10,7 @@ class PromptType(str, Enum):
     HALLUCINATION_CHECKER = "hallucination_checker"
     MESSAGEFILTER = "Message_filter"
     MESSAGESUMMARY = "Message_summary"
+    ISSUETRACK = "Issue_Track"
 
     
 
