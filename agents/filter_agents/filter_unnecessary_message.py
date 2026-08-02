@@ -1,6 +1,9 @@
-from langchain.messages import ToolMessage
 import json
+import os
 from typing import List
+from dotenv import load_dotenv
+from langchain.messages import ToolMessage
+
 
 from langchain_core.prompts import ChatPromptTemplate
 from agentic_ai_platform import logger
@@ -8,9 +11,7 @@ from agentic_ai_platform.states.filter_message_state import FilterMessageBatchSt
 from track_issue_system.finetune.db import filtered_message_log_predictions
 
 
-
-
-
+load_dotenv()
 
 
 def create_message_filter_agent(node_llm,
@@ -55,14 +56,18 @@ def create_message_filter_agent(node_llm,
         This function attempts to log the filtered messages to the database, 
         and any exceptions during this process are caught and logged without interrupting the main flow.
         """
-        try:
-            from track_issue_system.finetune.db import filtered_message_log_predictions
-            filtered_message_log_predictions(model_name=node_llm.model_name,
-                                              prompt_version=prompt_version,
-                                              thread_id=thread_id,
-                                              items=all_items)
-        except Exception as e:
-            logger.error(f'message_filter_agent logging error => {e}')
+        if os.getenv("POSTGRES_Dataset_Update", "true") == "true":
+            try:
+                from track_issue_system.finetune.db import filtered_message_log_predictions
+                filtered_message_log_predictions(model_name=node_llm.model_name,
+                                                prompt_version=prompt_version,
+                                                thread_id=thread_id,
+                                                items=all_items)
+            except Exception as e:
+                logger.error(f'message_filter_agent logging error => {e}')
+
+        else:
+            logger.info("POSTGRES_Dataset_Update is set to false, skipping logging to database.")
 
 
     
