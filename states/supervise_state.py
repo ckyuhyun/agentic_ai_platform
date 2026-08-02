@@ -13,16 +13,16 @@ from agentic_ai_platform.states.filter_message_state import FilterMessageBatchSt
 
 class NodeTrace(BaseModel):
     """Execution record written by each node for trace-based evaluation."""
-    node: str            = Field(description="Node name")
-    iteration: int       = Field(description="recycle index of node calling")
-    started_at: float    = Field(default_factory=time.time)
-    latency_ms: float    = Field(default=0.0)
-    model: str           = Field(default="")
-    tool_calls_made: List[str]   = Field(default_factory=list)
-    draft_len: Optional[int]     = Field(default=None)
-    score: Optional[float]       = Field(default=None)
-    approved: Optional[bool]     = Field(default=None)
-    issue_count: Optional[int]   = Field(default=None)
+    node: Annotated[str, Field(description="Node name")]
+    iteration: Annotated[int, Field(description="recycle index of node calling")]
+    started_at: Annotated[float, Field(default_factory=time.time)]
+    latency_ms: Annotated[float, Field(default=0.0)]
+    model: Annotated[str, Field(default="")]
+    tool_calls_made: Annotated[List[str], Field(default_factory=list)]
+    draft_len: Annotated[Optional[int], Field(default=None)]
+    score: Annotated[Optional[float], Field(default=None)]
+    approved: Annotated[Optional[bool], Field(default=None)]
+    issue_count: Annotated[Optional[int], Field(default=None)]
  
     @staticmethod
     def start(node: str, 
@@ -48,14 +48,14 @@ class CriticFeedback(BaseModel):
     suggestions: Annotated[List[str], operator.add] = Field(default_factory=list, description="Concrete improvements to apply")
     reasoning: Annotated[str, operator.add] = Field(description="Brief explanation of the score and decision")
 
-    hallucination_config : HallucinationCheckerConfig = Field(default_factory=HallucinationCheckerConfig, description="Configuration for hallucination checking")     
-    hallucination_score : Optional[float] = Field(default=None, description="Hallucination severity score from 0 (none) to 1 (severe)")
-    hallucination_issues: Optional[List[str]] = Field(default=None, description="List of identified hallucination issues, if any")
+    hallucination_config : Annotated[HallucinationCheckerConfig, Field(default_factory=HallucinationCheckerConfig, description="Configuration for hallucination checking")]
+    hallucination_score : Annotated[Optional[float], Field(default=None, description="Hallucination severity score from 0 (none) to 1 (severe)")]
+    hallucination_issues: Annotated[Optional[List[str]], Field(default=None, description="List of identified hallucination issues, if any")]
 
 class DraftConfig(BaseModel):
     """Configuration parameters for the drafting process. and allowing writign once"""
-    max_iterations: int = Field(default=3, description="Maximum number of draft/critique cycles before forcing acceptance")
-    approval_threshold: float = Field(default=0.8, description="Minimum critic score required for approval")    
+    max_iterations: Annotated[int, Field(default=3, description="Maximum number of draft/critique cycles before forcing acceptance")]
+    approval_threshold: Annotated[float, Field(default=0.8, description="Minimum critic score required for approval")]
 
     # _initialized: bool = False 
     # @model_validator(mode="after")
@@ -67,33 +67,33 @@ class DraftConfig(BaseModel):
 
     
 class AbstractSuperviseState(BaseModel):
-    messages_filtered : bool = Field(
-        default=False, description="if the slack messages filtered out to remove unnecessary messages, return True")
-
     # Observability/eval identifiers, set once when the run starts and carried
     # unchanged through every node so LLM calls, tool calls, and stored records
     # can be grouped and replayed by run.
-    thread_id :Optional[str] = Field(
-         default=None, description="Thread Id of this graph runthread id")
-    
+    thread_id : Annotated[Optional[str], Field(
+         default=None, description="Thread Id of this graph runthread id")]
+
     # state_id: Optional[str] = Field(
     #     default=None, description="Id of this graph run (== LangGraph/scheduler thread id)")
-    
+
     # session_id: Optional[str] = Field(
     #     default=None, description="Business-level grouping id (defaults to state_id; distinct when multiple runs belong to one session)")
-    
-        
-    iteration: int = Field(
-        default=0, description="Number of draft/critique cycles completed")
-    
+
+
+    iteration: Annotated[int, Field(
+        default=0, description="Number of draft/critique cycles completed")]
+
     # LangGraph message history
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
-    
+
     # Trace-based evaluation records
-    node_traces: List[NodeTrace] = Field(
-        default_factory=list, description="Per-node execution traces for evaluation")
-    
-    filtered_message : FilterMessageBatchState = Field(default = None,  description="filtered message with different aspect - blacklist, hallucination, safty etc")
+    node_traces: Annotated[List[NodeTrace], Field(
+        default_factory=list, description="Per-node execution traces for evaluation")]
+
+    messages_filtered : Annotated[bool, Field(
+            default=False, description="if the slack messages filtered out to remove unnecessary messages, return True")]
+
+    filtered_message : Annotated[FilterMessageBatchState, Field(default = None,  description="filtered message with different aspect - blacklist, hallucination, safty etc")]
 
 
 
@@ -104,42 +104,42 @@ class SuperviseState(AbstractSuperviseState):
     task: Annotated[str, operator.add] = Field(
         description="The task or prompt the drafter must complete")   
     
-    query_state : QueryState = Field(
-        default_factory=QueryState, description="State related to query rewriting and generation")
+    query_state : Annotated[QueryState, Field(
+        default_factory=QueryState, description="State related to query rewriting and generation")]
 
     # Drafter output
-    draft: Optional[Union[str,list]] = Field(
-        default=None, description="Most recent draft produced by the drafter")    
+    draft: Annotated[Optional[Union[str,list]], Field(
+        default=None, description="Most recent draft produced by the drafter")]    
     
 
     # Critic output
-    critique: Optional[CriticFeedback] = Field(
-        default=None, description="Structured feedback from the critic")
+    critique: Annotated[Optional[CriticFeedback], Field(
+        default=None, description="Structured feedback from the critic")]
 
     # Tool output history (if using tools)
-    tool_calls: list[ToolState] = Field(
-        default_factory=list, description="History of tool calls made during drafting, if any")
+    tool_calls: Annotated[list[ToolState], Field(
+        default_factory=list, description="History of tool calls made during drafting, if any")]
 
     # Loop control
-    graph_config : DraftConfig = Field(
-        default_factory=DraftConfig, description="Configuration for the drafting process")
+    graph_config : Annotated[DraftConfig, Field(
+        default_factory=DraftConfig, description="Configuration for the drafting process")]
 
     
 
     # Final result — set when critic approves or max_iterations reached
-    final_output: Optional[str] = Field(
-        default=None, description="The accepted draft")
+    final_output: Annotated[Optional[str], Field(
+        default=None, description="The accepted draft")]
 
     
 
 
     # Cursor into `messages` marking how many have been consumed by downstream
     # agents (e.g. rewrite_query_agent picking up new human_review answers).
-    last_reviewed_message_index: int = Field(
-        default=0, description="Number of messages already processed from the message history")
+    last_reviewed_message_index: Annotated[int, Field(
+        default=0, description="Number of messages already processed from the message history")]
 
     # planner state
-    plan : PlanState = Field(
-        default_factory=PlanState, description="planning for execution")
+    plan : Annotated[PlanState, Field(
+        default_factory=PlanState, description="planning for execution")]
 
 

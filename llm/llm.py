@@ -12,7 +12,7 @@ from langchain.chat_models import init_chat_model
 # (see agentic_ai_platform/docker-compose.yml). Pass model_name="qwen2.5-local"
 # to route through it instead of Claude/Ollama.
 _VLLM_MODELS = {
-    "qwen2.5-local": "Qwen/Qwen2.5-3B-Instruct-AWQ",
+    "qwen2.5-local": "Qwen/Qwen2.5-1.5B-Instruct",
 }
 
 
