@@ -8,6 +8,7 @@ from langchain.chat_models import init_chat_model
 
 
 
+
 # Opt-in alias -> actual model id served by the local vllm-engine container
 # (see agentic_ai_platform/docker-compose.yml). Pass model_name="qwen2.5-local"
 # to route through it instead of Claude/Ollama.
@@ -73,6 +74,19 @@ class LLM:
         response =self.llm_instance.invoke(message,
                                            config=config)
         return response
+
+    def get_token_len(self,
+                      text: str) -> int:
+        """
+        Estimate the number of tokens in the given text.
+
+        Uses the ~4-characters-per-token rule of thumb (OpenAI's own guidance
+        for English text) instead of a model-specific tokenizer, since local/
+        Ollama/vLLM models (e.g. qwen2.5-local) have no tiktoken encoding.
+        """
+        if not text:
+            return 0
+        return max(1, len(text) // 4)
     
     def _llm_model_init_(self):
         _local_docker_llm_models = {"llama3", "llama3.1", "llama3.2", "mistral", "gemma", "phi3", "qwen2"}
