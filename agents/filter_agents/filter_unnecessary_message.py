@@ -13,40 +13,65 @@ from track_issue_system.finetune.db import filtered_message_log_predictions
 
 load_dotenv()
 
+def filter_out_unnecessary_messages(messages: List[str]) -> List[dict]:
+    """
+    Filters out unnecessary messages from the given list of messages.
+    Unnecessary messages are those that are empty or contain only whitespace.
+    
+    Args:
+        messages (List[str]): A list of message strings.
+    """
+    # 1. filter out messages that are empty or contain only whitespace
+    filtered_messages = [msg for msg in messages if msg.strip()]
 
-def create_message_filter_agent(node_llm,
-                                system_prompt: str,
-                                batch_size: int = 20,
-                                max_concurrency: int = 4,
-                                prompt_version: str = "0"):
+    # 2. filter out messages that are repetitive or duplicates based on their text content
+    seen_texts = set(msg.strip() for msg in filtered_messages)
 
-    prompt_template = ChatPromptTemplate.from_messages([("system", system_prompt), 
-                                                        ("human", "{input}")])
+    # 3. filter out messages that might be too short to be relevant (e.g., less than 10 characters)
+    filtered_messages = [msg for msg in list(seen_texts) if len(msg.strip()) > 10]
 
-    def classify_messages(node_llm,
+    
+    return filtered_messages
+
+def classify_messages(node_llm,
                        prompt_template: ChatPromptTemplate,
                        message_texts: List[str],
-                       batch_size: int = 20,
-                       max_concurrency: int = 4) -> List[FilterMessageItem]:
+                       batch_size: int,
+                       max_concurrency: int) -> List[FilterMessageItem]:
         """
         Classify each message in message_texts as relevant/not relevant, in chunks of
         batch_size sent concurrently via .batch(). Returned items keep their original
         (global) index into message_texts.
         """
+        pre_filtered_messages = filter_out_unnecessary_messages(message_texts)
+        chunks = [pre_filtered_messages[i:i + batch_size] for i in range(0, len(pre_filtered_messages), batch_size)]
 
-        chunks = [message_texts[i:i + batch_size] for i in range(0, len(message_texts), batch_size)]
+        try:
+            
+            results = []
+            for chunk_index, chunk in enumerate(chunks):
+                offset = chunk_index * batch_size
+                joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
+                prompt = prompt_template.format_messages(input=joined_str)
 
-        prompts = []
-        for chunk_index, chunk in enumerate(chunks):
-            offset = chunk_index * batch_size
-            joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
-            prompts.append(prompt_template.format_messages(input=joined_str))
+                structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchState)
+                results.extend(structured_llm.batch([prompt], config={"max_concurrency": max_concurrency}))
+            
+            
+            return [item for result in results for item in result.items]
+        except Exception as e:
+            logger.error(f'classify_messages error => {e}')
+            return []
 
-        structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchState)
-        results = structured_llm.batch(prompts, 
-                                    config={"max_concurrency": max_concurrency})
-        return [item for result in results for item in result.items]
 
+def create_message_filter_agent(node_llm,
+                                system_prompt: str,
+                                batch_size: int = 5,
+                                max_concurrency: int = 4,
+                                prompt_version: str = "0"):
+
+    prompt_template = ChatPromptTemplate.from_messages([("system", system_prompt), 
+                                                        ("human", "{input}")])
 
 
     def seed_dataset_to_db(thread_id: str, 
@@ -93,8 +118,11 @@ def create_message_filter_agent(node_llm,
                 return state.model_copy(update={"messages": json.dumps([]),
                                                 "messages_filtered":True})
 
-            all_items = classify_messages(node_llm, prompt_template, message_texts,
-                                        batch_size=batch_size, max_concurrency=max_concurrency)
+            all_items = classify_messages(node_llm, 
+                                          prompt_template, 
+                                          message_texts,
+                                          batch_size=batch_size, 
+                                          max_concurrency=max_concurrency)
 
             # feed the data into database for future fine-tuning
             seed_dataset_to_db(state.thread_id,
