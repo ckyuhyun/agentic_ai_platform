@@ -1,19 +1,16 @@
-services:
-
-  vllm-engine:
+x-vllm-basic-service: &vllm-basic-service
     image: vllm/vllm-openai:latest # Or vllm/vllm-openvino if utilizing CPU/Intel optimizations
     container_name: vllm-server
     environment:
       - HF_TOKEN=${HF_TOKEN}
       - OMP_NUM_THREADS=14 # Match your CPU physical cores
-    volumes:
-      - vllm_data:/root/.cache/huggingface      
-      # Uncomment to serve a fine-tuned candidate from
-      # track_issue_system/finetune/merge_and_quantize.py instead of the HF
-      # hub baseline (see track_issue_system/finetune/README.md stage 3):
-      - ../track_issue_system/finetune/output/qwen2.5-1.5b-issue-filter:/models/candidate:ro
+      # vLLM disables pinned memory on WSL2 by default (even on kernels that
+      # support it), which breaks the V1 GPU worker's UVA-backed buffers with
+      # "RuntimeError: UVA is not available". Opt back in -- requires WSL2
+      # kernel >= 4.19.121 (run `wsl --update` on the host if unsure).
+      - VLLM_WSL2_ENABLE_PIN_MEMORY=1
     ports:
-      - "8000:8000"
+        - "8000:8000"
     deploy:
       resources:
         reservations:
@@ -28,24 +25,18 @@ services:
       retries: 5
       start_period: 600s
 
-    # command: >
-    #   Qwen/Qwen2.5-1.5B-Instruct
-    #   --quantization awq
-    #   --max-model-len 2048
-    #   --gpu-memory-utilization 0.85
-    #   --enforce-eager
-    #   --enable-auto-tool-choice
-    #   --tool-call-parser hermes
-    #   --enable-prefix-caching
-    #   --host 0.0.0.0
-    #   --port 8000
-    
-    # To serve the candidate instead: comment out the `command:` block above,
-    # uncomment the volume mount above it, and use this one instead. The
-    # --served-model-name keeps it answering to the same model id the app's
-    # LLM("qwen2.5-local") sends, so no code changes are needed to swap back
-    # and forth -- just this file + a container recreate.
-    #
+    ipc: host
+    restart: unless-stopped
+services:
+  vllm-engine-finetunedmodel:
+    <<: *vllm-basic-service
+    volumes:
+      - vllm_data:/root/.cache/huggingface      
+      # Uncomment to serve a fine-tuned candidate from
+      # track_issue_system/finetune/merge_and_quantize.py instead of the HF
+      # hub baseline (see track_issue_system/finetune/README.md stage 3):
+      - ../track_issue_system/data_pipeline/output/qwen2.5-1.5b-issue-filter:/models/candidate:ro
+
     # NOTE: this directory currently holds the *merged bf16* model, not a real
     # AWQ-quantized one (merge_and_quantize.py's quantize_awq() step is
     # commented out -- autoawq/triton has no Windows wheel). No --quantization
@@ -64,12 +55,28 @@ services:
       --enable-auto-tool-choice
       --tool-call-parser hermes
       --enable-prefix-caching
-      --safetensors-load-strategy=none
       --host 0.0.0.0
       --port 8000
-      
-    ipc: host
-    restart: unless-stopped
+
+
+  vllm-engine-basemodel:
+    <<: *vllm-basic-service    
+    volumes:
+      - vllm_data:/root/.cache/huggingface      
+
+    command: >
+      Qwen/Qwen2.5-1.5B-Instruct-AWQ
+      --served-model-name Qwen/Qwen2.5-1.5B-Instruct
+      --quantization awq
+      --max-model-len 2048
+      --gpu-memory-utilization 0.8
+      --enforce-eager
+      --enable-auto-tool-choice
+      --tool-call-parser hermes
+      --enable-prefix-caching
+      --host 0.0.0.0
+      --port 8000
+    
   # ollama:
   #   image: ollama/ollama:latest
   #   container_name : ollama
@@ -181,9 +188,9 @@ services:
       timeout: 10s
       retries: 5
       start_period: 10s
-    depends_on:
-      vllm-engine:
-        condition: service_healthy
+    #depends_on:
+    #   vllm-engine:
+    #    condition: service_healthy
 
 
   pgai-initializer:
