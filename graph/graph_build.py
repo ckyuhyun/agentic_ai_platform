@@ -47,11 +47,14 @@ class GraphBuild:
         else:
             self.app = graph.compile()
       
-        try:
-            for chunk in self.app.stream(init_state,
-                                        config=self.config,
-                                        stream_mode=stream_mode,
-                                        version="v2"):
+        try:            
+            # for chunk in self.app.stream(init_state,
+            #                             config=self.config,
+            #                             stream_mode=stream_mode,
+        #                             version="v2"):
+            for chunk in self.app.stream_events(init_state,
+                                                config=self.config,
+                                                version="v3"):
                 self._handle_chunk(chunk)
         except ValueError as e:
             RuntimeError(f"Error during graph execution: {str(e)}")
