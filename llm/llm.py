@@ -1,6 +1,8 @@
 import os
 import httpx
+import json
 from dotenv import load_dotenv
+from typing import List, Any
 from tenacity import (
     retry,
     retry_if_exception,
@@ -10,6 +12,7 @@ from tenacity import (
 )
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from langchain.chat_models import init_chat_model
@@ -82,6 +85,8 @@ class LLM:
         self.VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
         self._llm_model_ = self._llm_model_init_()
         self.llm_instance = self._llm_model_
+        self.TOKEN_LIMIT = 2048
+        self.Batch_size = 30
 
     def bind_tools(self,
                    tools: list,
@@ -101,16 +106,69 @@ class LLM:
 
     @_llm_call_retry
     def invoke_by_single_prompt(self,
-                                system_human_message:str,
-                                config : dict = None) -> str:
+                                system_human_message:List[Any],
+                                config : dict = None):
         """
         Invoke the LLM with the given system and human messages, and return the response.
         """
-        response =self.llm_instance.invoke(system_human_message,
-                                        config=config)
+        system_prompt, human_prompt = self._decode_human_system_prompt(system_human_message)
+        human_prompt_len = self.get_token_len(human_prompt)
+        system_prompt_len = self.get_token_len(system_prompt)
+        if ( human_prompt_len+ system_prompt_len)*2 >= self.TOKEN_LIMIT:
+            
+            response = self._batch_invoke(system_message=system_prompt,
+                                          human_message = human_prompt,
+                                         config=config)
+        else:
+            response = self._single_invoke(system_human_message=system_human_message,
+                                            config=config)
 
         return response
+
+       
+
+    def _single_invoke(self,
+                       system_human_message:str,
+                       config : dict = None) -> str:
+
+        return self.llm_instance.invoke(system_human_message,
+                                        config=config)
+
+    def _batch_invoke(self,
+                      system_message:str,
+                      human_message:str,
+                      config : dict = None) -> str | List[str]:
+
+        # TODO: update how to chunk
+        chunks = [human_message[i: i+self.Batch_size] for i in range(0, len(human_message), self.Batch_size)]
+
+        prompts = []
+        for idx, c in enumerate(chunks):
+            prompt = ChatPromptTemplate.from_messages([("system", system_message),
+                                                       ("human",c)])
+
+            
+            prompts.append(prompt.format_messages())
+
+        result = self.llm_instance.batch(prompts, config={"max_concurrency": 4})
+        return result
         
+
+    def _decode_human_system_prompt(self,
+                          system_human_message:List[Any]) -> tuple[str, str]:
+        system_prompt  = ""
+        human_prompt  = ""
+        for msg in system_human_message:
+            if isinstance(msg, HumanMessage):
+                human_prompt = msg.content
+            elif isinstance(msg, SystemMessage):
+                system_prompt = msg.content
+        
+        return system_prompt, human_prompt
+
+
+
+
     
     def invoke(self, 
              system_message: str = None,

@@ -7,7 +7,7 @@ from langchain.messages import ToolMessage
 
 from langchain_core.prompts import ChatPromptTemplate
 from agentic_ai_platform import logger
-from agentic_ai_platform.states.filter_message_state import FilterMessageBatchState, FilterMessageItem
+from agentic_ai_platform.states.filter_message_state import FilterMessageBatchState, FilterMessageItem, FilterMessageBatchStateLLM
 from track_issue_system.finetune.db import filtered_message_log_predictions
 
 
@@ -44,24 +44,39 @@ def classify_messages(node_llm,
         (global) index into message_texts.
         """
         pre_filtered_messages = filter_out_unnecessary_messages(message_texts)
-        chunks = [pre_filtered_messages[i:i + batch_size] for i in range(0, len(pre_filtered_messages), batch_size)]
+        #chunks = [pre_filtered_messages[i:i + batch_size] for i in range(0, len(pre_filtered_messages), batch_size)]
 
-        try:
-            
-            results = []
-            for chunk_index, chunk in enumerate(chunks):
-                offset = chunk_index * batch_size
-                joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
-                prompt = prompt_template.format_messages(input=joined_str)
+        structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchStateLLM)
 
-                structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchState)
-                results.extend(structured_llm.batch([prompt], config={"max_concurrency": max_concurrency}))
-            
-            
-            return [item for result in results for item in result.items]
-        except Exception as e:
-            logger.error(f'classify_messages error => {e}')
-            return []
+        results: List[FilterMessageItem] = []
+        for chunk_index, chunk in enumerate(pre_filtered_messages):
+            # offset = chunk_index * batch_size
+            # joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
+            prompt = prompt_template.format_messages(input=chunk)
+
+            try:
+                response = structured_llm.batch([prompt], config={"max_concurrency": max_concurrency})
+            except Exception as e:
+                # A single chunk failing (e.g. the model's completion got cut off
+                # before it could finish the JSON) shouldn't discard results
+                # already collected from other chunks.
+                logger.error(f'classify_messages chunk {chunk_index} error => {e}')
+                continue
+
+            for batch_result in response:
+                for llm_item in batch_result.items:
+                    if not (0 <= llm_item.index < len(pre_filtered_messages)):
+                        continue
+                    # index from llm seems starting with 1
+                    message_index = llm_item.index-1 
+                    results.append(FilterMessageItem(
+                        index=llm_item.index,
+                        scoring=llm_item.scoring,
+                        reasoning=llm_item.reasoning,
+                        cleaned_message=pre_filtered_messages[message_index],
+                    ))
+
+        return results
 
 
 def create_message_filter_agent(node_llm,

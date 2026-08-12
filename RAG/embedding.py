@@ -78,7 +78,7 @@ class Embeddings(EmbeddedModelDecision):
 
 
     def generate_embedding_documents(self, 
-                                     documents : List[Document]) -> List[Union[str]]:
+                                     documents : List[Document]) -> List[str | None]:
         try:
             """Generate embedding vector for single text"""
             if "huggingface" in self.embedding_method:
