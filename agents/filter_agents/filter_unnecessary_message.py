@@ -65,7 +65,7 @@ def classify_messages(node_llm,
 
             for batch_result in response:
                 for llm_item in batch_result.items:
-                    if not (0 <= llm_item.index < len(pre_filtered_messages)):
+                    if not (0 <= llm_item.index <= len(pre_filtered_messages)):
                         continue
                     # index from llm seems starting with 1
                     message_index = llm_item.index-1 
