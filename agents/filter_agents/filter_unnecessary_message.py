@@ -112,7 +112,7 @@ def create_message_filter_agent(node_llm,
 
     
 
-    def message_filter_agent(state):
+    async def message_filter_agent(state):
         """
         This function filters out unnecessary messages from the tool states in the given state.
         It checks each tool state and removes those that are deemed unnecessary based on certain criteria.
@@ -133,10 +133,10 @@ def create_message_filter_agent(node_llm,
                 return state.model_copy(update={"messages": json.dumps([]),
                                                 "messages_filtered":True})
 
-            all_items = classify_messages(node_llm, 
-                                          prompt_template, 
+            all_items = await classify_messages(node_llm,
+                                          prompt_template,
                                           message_texts,
-                                          batch_size=batch_size, 
+                                          batch_size=batch_size,
                                           max_concurrency=max_concurrency)
 
             # feed the data into database for future fine-tuning
