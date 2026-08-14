@@ -112,9 +112,12 @@ class LLM:
         Invoke the LLM with the given system and human messages, and return the response.
         """
         system_prompt, human_prompt = self._decode_human_system_prompt(system_human_message)
-        human_prompt_len = self.get_token_len(human_prompt)
-        system_prompt_len = self.get_token_len(system_prompt)
-        if ( human_prompt_len+ system_prompt_len)*2 >= self.TOKEN_LIMIT:
+        human_prompt_token_count =  await self.get_token_count(human_prompt)
+        system_prompt_token_count = await self.get_token_count(system_prompt)
+
+        
+
+        if (human_prompt_token_count+ system_prompt_token_count) >= self.TOKEN_LIMIT:
             
             response = await self._batch_invoke(system_message=system_prompt,
                                           human_message = human_prompt,
@@ -150,6 +153,7 @@ class LLM:
             
             prompts.append(prompt.format_messages())
 
+        
         result = await self.llm_instance.abatch(prompts, config={"max_concurrency": 4})
         return result
         
@@ -188,7 +192,7 @@ class LLM:
                                            config=config)
         return response
 
-    def get_token_len(self,
+    async def get_token_count(self,
                       text: str) -> int:
         """
         Estimate the number of tokens in the given text.
@@ -197,9 +201,21 @@ class LLM:
         for English text) instead of a model-specific tokenizer, since local/
         Ollama/vLLM models (e.g. qwen2.5-local) have no tiktoken encoding.
         """
-        if not text:
-            return 0
-        return max(1, len(text) // 4)
+        
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{self.VLLM_BASE_URL.removesuffix('/v1')}/tokenize",
+                json={"model": _VLLM_MODELS[self.model_name], "prompt": text},
+                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
+                )
+            resp.raise_for_status()
+
+            if resp.status_code == 200:
+                return resp.json()["count"]
+            else:
+                # if not getting the token count from the VLLM tokenizer well
+                return max(1, len(text) // 4)   
+        
     
     def _llm_model_init_(self):
         _local_docker_llm_models = {"llama3", "llama3.1", "llama3.2", "mistral", "gemma", "phi3", "qwen2"}
