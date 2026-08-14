@@ -17,7 +17,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
                          system_prompt: str):
 
 
-    def rewrite_query_agent(state:SuperviseState):
+    async def rewrite_query_agent(state:SuperviseState):
         """
         Rewrite the input query to improve its clarity and specificity.
 
@@ -51,7 +51,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
         )
 
 
-        rewritten_query = llm.invoke(prompt)
+        rewritten_query = await llm.ainvoke(prompt)
         #rewritten_query = re.search(r'"([^"]*)"',rewritten_query.content).group(1) # extract the rewritten query from the LLM response, assuming it's enclosed in quotes
 
         state.query_state.rewritten_question = rewritten_query.content

@@ -18,7 +18,7 @@ def HallucinationsJudge(schema : Type[BaseModel],
                         hallucination_system_prompt_version_id : str):
     
         
-    def hallucination_safeguide(_draft: str) -> HallucinationSignal:
+    async def hallucination_safeguide(_draft: str) -> HallucinationSignal:
         logs = []
         prompt  = prompt_hub.get_prompt(
             prompt_type="hallucination_checker",
@@ -30,7 +30,7 @@ def HallucinationsJudge(schema : Type[BaseModel],
             final_prompt = [SystemMessage(content=prompt) , 
                             HumanMessage(content=_draft)]
 
-            hallucination_safeguide_result = structed_model.invoke(final_prompt) 
+            hallucination_safeguide_result = await structed_model.ainvoke(final_prompt) 
 
             _pattern = hallucination_safeguide_result.pattern
             _severity = hallucination_safeguide_result.severity

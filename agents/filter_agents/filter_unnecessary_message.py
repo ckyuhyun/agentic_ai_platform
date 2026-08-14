@@ -33,7 +33,7 @@ def filter_out_unnecessary_messages(messages: List[str]) -> List[dict]:
     
     return filtered_messages
 
-def classify_messages(node_llm,
+async def classify_messages(node_llm,
                        prompt_template: ChatPromptTemplate,
                        message_texts: List[str],
                        batch_size: int,
@@ -55,7 +55,7 @@ def classify_messages(node_llm,
             prompt = prompt_template.format_messages(input=chunk)
 
             try:
-                response = structured_llm.batch([prompt], config={"max_concurrency": max_concurrency})
+                response = await structured_llm.abatch([prompt], config={"max_concurrency": max_concurrency})
             except Exception as e:
                 # A single chunk failing (e.g. the model's completion got cut off
                 # before it could finish the JSON) shouldn't discard results

@@ -21,7 +21,7 @@ def create_planner_agent(
     """
     
 
-    def planner_agent(state):
+    async def planner_agent(state):
         
         
         prompt = ChatPromptTemplate.from_messages([
@@ -43,7 +43,7 @@ def create_planner_agent(
                                             tags=["planner"]
                                         ))
         
-        planstate: PlanState = structed_model.invoke(prompt)        
+        planstate: PlanState = await structed_model.ainvoke(prompt)        
         
         return state.model_copy(update={"plan": planstate})
 

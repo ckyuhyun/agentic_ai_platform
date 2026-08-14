@@ -1,6 +1,5 @@
 import json
-import os
-import uuid
+
 
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
@@ -9,7 +8,7 @@ from langgraph.types import StateSnapshot
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableConfig
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, List
 
 try:
     from agentic_ai_platform.eval.langsmith.note_trace import post_trace
@@ -24,40 +23,47 @@ StreamMode = Literal["values", "messages", "custom", "updates"]
 
 class GraphBuild:
     def __init__(self, 
-                 enabled_persistentMemory=True):
+                 enabled_persistentMemory=False):
         self.app = None
         self.enabled_persistentMemory = enabled_persistentMemory
         self.config : Optional[RunnableConfig] = None
         load_dotenv()
         
 
-    def stream_run_graph(
+    async def stream_run_graph(
         self,
         graph: StateGraph,
         init_state: Any,
-        config : Optional[RunnableConfig],
+        config : RunnableConfig | None,
+        agents_interrupted_after : List | None,
         stream_mode: StreamMode = "values",
+        checkpointer: Any = None,
     ):
         self.config = config
 
-        checkpoints = InMemorySaver()
 
-        if self.enabled_persistentMemory:
-            self.app = graph.compile(checkpointer=checkpoints)
+
+        if checkpointer is not None:
+            # Caller supplied a real saver (e.g. PostgresSaverWrapper.checkpointer) -- use it.
+            self.app = graph.compile(checkpointer=checkpointer,
+                                     interrupt_after=agents_interrupted_after)
+        elif self.enabled_persistentMemory:
+            self.app = graph.compile(checkpointer=InMemorySaver(),
+                                     interrupt_after=agents_interrupted_after)
         else:
-            self.app = graph.compile()
+            self.app = graph.compile(interrupt_after=agents_interrupted_after)
       
-        try:            
-            for chunk in self.app.stream(init_state,
+        try:
+            async for chunk in self.app.astream(init_state,
                                         config=self.config,
                                         stream_mode=stream_mode,
-                                    version="v2"):            
+                                    version="v2"):
                 self._handle_chunk(chunk)
         except ValueError as e:
             RuntimeError(f"Error during graph execution: {str(e)}")
 
         if LANGSMITH_AVAILABLE:
-           self._post_traces_to_langsmith()
+           await self._post_traces_to_langsmith()
 
         
 
@@ -101,8 +107,8 @@ class GraphBuild:
         #     print(f"  [updates] {key}: {str(value)}")
 
 
-    def _post_traces_to_langsmith(self):
-        snapshot = self.get_state()
+    async def _post_traces_to_langsmith(self):
+        snapshot = await self.get_state()
         if not snapshot:
             return
         node_traces = snapshot.values.get("node_traces", [])
@@ -118,11 +124,13 @@ class GraphBuild:
         # the root run on it identifies *this* run instead of the project's
         # most-recently-created root run, which could belong to a different call.
         metadata_filter = json.dumps({"thread_id": thread_id})
-        runs = list(ls.list_runs(
+        result = ls.list_runs(
+            trace_id=thread_id,
             is_root=True,
             #filter=f"has(metadata, '{metadata_filter}')",
             limit=1,
-        ))
+        )
+        runs = list(result)
         if runs:
             post_trace(
                 run_name=str(runs[0].id),
@@ -130,9 +138,9 @@ class GraphBuild:
 
     # ── state access ──────────────────────────────────────────────────────────
 
-    def get_state(self) -> Optional[StateSnapshot]:
+    async def get_state(self) -> Optional[StateSnapshot]:
         """Return the latest StateSnapshot for the current thread."""
         if self.app is None or self.config is None:
             return None
-        return self.app.get_state(self.config)
+        return await self.app.aget_state(self.config)
         

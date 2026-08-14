@@ -105,7 +105,7 @@ class LLM:
 
 
     @_llm_call_retry
-    def invoke_by_single_prompt(self,
+    async def invoke_by_single_prompt(self,
                                 system_human_message:List[Any],
                                 config : dict = None):
         """
@@ -116,25 +116,25 @@ class LLM:
         system_prompt_len = self.get_token_len(system_prompt)
         if ( human_prompt_len+ system_prompt_len)*2 >= self.TOKEN_LIMIT:
             
-            response = self._batch_invoke(system_message=system_prompt,
+            response = await self._batch_invoke(system_message=system_prompt,
                                           human_message = human_prompt,
                                          config=config)
         else:
-            response = self._single_invoke(system_human_message=system_human_message,
+            response = await self._single_invoke(system_human_message=system_human_message,
                                             config=config)
 
         return response
 
        
 
-    def _single_invoke(self,
+    async def _single_invoke(self,
                        system_human_message:str,
                        config : dict = None) -> str:
 
-        return self.llm_instance.invoke(system_human_message,
+        return await self.llm_instance.ainvoke(system_human_message,
                                         config=config)
 
-    def _batch_invoke(self,
+    async def _batch_invoke(self,
                       system_message:str,
                       human_message:str,
                       config : dict = None) -> str | List[str]:
@@ -150,7 +150,7 @@ class LLM:
             
             prompts.append(prompt.format_messages())
 
-        result = self.llm_instance.batch(prompts, config={"max_concurrency": 4})
+        result = await self.llm_instance.abatch(prompts, config={"max_concurrency": 4})
         return result
         
 
@@ -184,7 +184,7 @@ class LLM:
         if human_message:
             message.append(HumanMessage(content=human_message))
 
-        response =self.llm_instance.invoke(message,
+        response =self.llm_instance.ainvoke(message,
                                            config=config)
         return response
 

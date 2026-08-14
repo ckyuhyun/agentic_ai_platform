@@ -1,8 +1,7 @@
 import os
 import psycopg2
-from langgraph.checkpoint.postgres import PostgresSaver
-from langgraph.graph import START, StateGraph, MessagesState
-from psycopg_pool import ConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
 
@@ -29,21 +28,31 @@ class PostgresSaverWrapper:
     def checkpointer(self):
         return self._checkpointer
 
-    def setup(self):
+    async def setup(self):
         """
-        Postgres Saver setup. Keeps the connection pool open for the
-        lifetime of this wrapper -- PostgresSaver.from_conn_string() is a
+        Async Postgres Saver setup. Keeps the connection pool open for the
+        lifetime of this wrapper -- AsyncPostgresSaver.from_conn_string() is a
         context manager that closes its connection on exit, so the
         checkpointer it yields becomes unusable once that block ends.
+
+        Uses AsyncPostgresSaver (not the sync PostgresSaver) because the
+        compiled graph is driven via app.astream()/app.ainvoke() -- the sync
+        saver's async methods (aget_tuple/aput/...) aren't implemented and
+        raise NotImplementedError as soon as the graph tries to checkpoint.
         """
-        self._pool = ConnectionPool(conninfo=self.db_url, kwargs={"autocommit": True, "row_factory":dict_row})
-        checkpointer = PostgresSaver(self._pool)
-        checkpointer.setup()
+        self._pool = AsyncConnectionPool(
+            conninfo=self.db_url,
+            kwargs={"autocommit": True, "row_factory": dict_row},
+            open=False,
+        )
+        await self._pool.open()
+        checkpointer = AsyncPostgresSaver(self._pool)
+        await checkpointer.setup()
         self._checkpointer = checkpointer
 
-    def close(self):
+    async def close(self):
         if self._pool is not None:
-            self._pool.close()
+            await self._pool.close()
             self._pool = None
 
 

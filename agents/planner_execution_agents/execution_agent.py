@@ -19,7 +19,7 @@ def create_execution_agent(
     and invokes tools for each step if applicable.
     """
 
-    def execution_agent(state):
+    async def execution_agent(state):
         trace = NodeTrace.start(node="executor", iteration=state.iteration, model="llama3.1")
 
         tools_invoked: List[str] = []
@@ -56,7 +56,7 @@ def create_execution_agent(
             if tool_hint and tools and tool_parameters:
                 matching_tool = next((t for t in tools if t.name == tool_hint), None)
                 if matching_tool:
-                    tool_result = matching_tool.invoke(tool_parameters)
+                    tool_result = await matching_tool.ainvoke(tool_parameters)
                     tools_invoked.append(tool_hint)
                     state.tool_calls.append(ToolState(
                         query=tool_parameters.get("query", step_description),
@@ -70,13 +70,13 @@ def create_execution_agent(
             if result_text is None and tool_llm and tools:
                 tool_bound_llm = tool_llm.bind_tools(tools)
                 final_query = state.query_state.rewritten_question
-                response = tool_bound_llm.invoke(final_query)
+                response = await tool_bound_llm.ainvoke(final_query)
 
                 if hasattr(response, "tool_calls") and response.tool_calls:
                     for call in response.tool_calls:
                         matching_tool = next((t for t in tools if t.name == call["name"]), None)
                         if matching_tool:
-                            tool_result = matching_tool.invoke(call["args"])
+                            tool_result = await matching_tool.ainvoke(call["args"])
                             tools_invoked.append(call["name"])
                             state.tool_calls.append(ToolState(
                                 query=call["args"].get("query", step_description),
@@ -89,7 +89,7 @@ def create_execution_agent(
             # 3. Fallback: pure LLM reasoning for steps that need no tool
             if result_text is None:
                 final_query =  state.query_state.rewritten_question
-                response = graph_llm.invoke(final_query)
+                response = await graph_llm.ainvoke(final_query)
                 result_text = response.content.strip()
 
             past_steps.append(f"Step: {step_description}\nResult: {result_text.strip()}")

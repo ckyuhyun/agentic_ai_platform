@@ -75,7 +75,8 @@ def build_drafter_critic_graph():
     drafter_agent = create_drafter_agent(SuperviseState,
                                         tool_llm=LLM("llama3.1").llm_instance,
                                          graph_llm=LLM("llama3.1").llm_instance,
-                                         tools=[Tools.search_rag, Tools.search_web])
+                                         tools=[Tools.search_rag]
+                                         #tools=[Tools.search_rag, Tools.search_web])
     
     
     critic_prompt = prompt_hub.get_prompt(prompt_type=PromptType.CRITIC, 

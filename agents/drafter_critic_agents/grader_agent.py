@@ -48,12 +48,12 @@ def create_grader_agent(
 
     #structured_model = graph_llm.with_structured_output(schema)
 
-    def grader_node(state: SuperviseState):
+    async def grader_node(state: SuperviseState):
 
         # start updating trace
         trace = NodeTrace.start(node="grader", iteration=state.iteration, model="llama3.1")
 
-        #tool_reports = _run_eval_tools(tool_map, state)        
+        #tool_reports = await _run_eval_tools(tool_map, state)        
         #tool_reports = run_eval_tools()
 
         # prompt = system_prompt + [
@@ -63,7 +63,7 @@ def create_grader_agent(
 
         critic_llm = graph_llm.bind_tools(eval_tools)
         try:
-            feedback = critic_llm.invoke(prompt)
+            feedback = await critic_llm.ainvoke(prompt)
         
             # feedback.approved = (
             #     feedback.score >= state.drafter_config.approval_threshold
@@ -100,7 +100,7 @@ def run_eval_tools():
     pass 
 
 
-def _run_eval_tools(tool_map: dict, state: SuperviseState) -> dict[str, str]:
+async def _run_eval_tools(tool_map: dict, state: SuperviseState) -> dict[str, str]:
     """Invoke every tool in tool_map and return {tool_name: report}."""
     reports = {}
     try:
@@ -108,7 +108,7 @@ def _run_eval_tools(tool_map: dict, state: SuperviseState) -> dict[str, str]:
             tool_input = _build_tool_input(tool, state)
             if name == "check_hallucinations":
                 tool_input["state"] = state
-            reports[name] = tool.invoke(tool_input)
+            reports[name] = await tool.ainvoke(tool_input)
     except Exception as e:
         raise RuntimeError(f"Error invoking tool '{name}': {e}")
 

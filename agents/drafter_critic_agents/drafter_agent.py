@@ -26,7 +26,7 @@ def create_drafter_agent(schema: Type[BaseModel],
         schema: The Pydantic model class representing the state. Must include `task`, `draft`, `iteration`, and `critique` fields.
                 Default is DraftState, but you can use a custom model as long as it has those fields.
     """
-    def drafter_node(state: SuperviseState) -> SuperviseState:
+    async def drafter_node(state: SuperviseState) -> SuperviseState:
 
         trace = NodeTrace.start(node="drafter", iteration=state.iteration, model="llama3.1")
         messages = []
@@ -47,12 +47,12 @@ def create_drafter_agent(schema: Type[BaseModel],
             messages.append(HumanMessage(content=revision_prompt))
 
         tool_llm_chain = tool_llm.bind_tools(tools)
-        response = tool_llm_chain.invoke(messages)
+        response = await tool_llm_chain.ainvoke(messages)
 
         tools_invoked = []
         if hasattr(response, "tool_calls") and response.tool_calls:
             for call in response.tool_calls:
-                tool_result = next(x for x in tools if x.name == call["name"]).invoke(call["args"])
+                tool_result = await next(x for x in tools if x.name == call["name"]).ainvoke(call["args"])
                 tools_invoked.append(call["name"])
                 state.tool_calls.append(ToolState(
                     query=call["args"].get("query", ""),
@@ -61,7 +61,7 @@ def create_drafter_agent(schema: Type[BaseModel],
                     tool_result=tool_result,
                 ))
 
-        response = graph_llm.invoke(messages)
+        response = await graph_llm.ainvoke(messages)
         new_draft = response.content.strip()
 
         state.draft = new_draft

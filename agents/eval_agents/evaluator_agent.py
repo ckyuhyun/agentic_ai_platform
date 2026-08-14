@@ -17,7 +17,7 @@ def create_evaluator_agent(
     """
     
 
-    def evaluator_agent(state):
+    async def evaluator_agent(state):
         prompt = ChatPromptTemplate.from_messages([
                 ("system", system_prompt),
                 ("human", "{input}")]).format_messages(
@@ -26,7 +26,7 @@ def create_evaluator_agent(
         
         structed_model = graph_llm.with_structured_output(schema)
         
-        evaluation_result = structed_model.invoke(prompt)
+        evaluation_result = await structed_model.ainvoke(prompt)
 
         updated_query_state = state.query_state.model_copy(update={"evaluation": evaluation_result})
 
