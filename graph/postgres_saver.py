@@ -3,14 +3,9 @@ import psycopg2
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
-from dotenv import load_dotenv
-
 
 from agentic_ai_platform.db.postgres_db import connection_params
 
-
-
-load_dotenv()
 
 class PostgresSaverWrapper:
     def __init__(self):        

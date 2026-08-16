@@ -1,6 +1,5 @@
 import os
 from typing import Optional
-from dotenv import load_dotenv
 from agentic_ai_platform.RAG.embedded_model_list import EmbeddingModel
 
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -33,7 +32,6 @@ except ImportError:
 
 class EmbeddedModelDecision:
     def __init__(self, internal_embedding_model=None, model_name=None):
-        load_dotenv()
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 
         self.internal_embedding_model = internal_embedding_model

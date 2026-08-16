@@ -1,19 +1,23 @@
 import json
 import os
-from typing import List
-from dotenv import load_dotenv
+from typing import List, Any
 from langchain.messages import ToolMessage
 
 
 from langchain_core.prompts import ChatPromptTemplate
 from agentic_ai_platform import logger
+from agentic_ai_platform.data_class.prompt_spec import PromptSpec
+from agentic_ai_platform.data_class.tool_spec import ToolSpec
+from agentic_ai_platform.enum.prompt_type import PromptType
+from agentic_ai_platform.llm.llm import LLM
+from agentic_ai_platform.tools.tool_hub import get_current_eligible_tools, next_attempt_number
 from agentic_ai_platform.states.filter_message_state import FilterMessageBatchState, FilterMessageItem, FilterMessageBatchStateLLM
-from track_issue_system.finetune.db import filtered_message_log_predictions
+from agentic_ai_platform.states.tool_state import ToolState
+from track_issue_system import prompt_hub
+from track_issue_system.agents.state_utils import normalize_state, wrap_state
 
 
-load_dotenv()
-
-def filter_out_unnecessary_messages(messages: List[str]) -> List[dict]:
+def filter_out_invalid_messages(messages: List[str]) -> List[dict]:
     """
     Filters out unnecessary messages from the given list of messages.
     Unnecessary messages are those that are empty or contain only whitespace.
@@ -43,7 +47,7 @@ async def classify_messages(node_llm,
         batch_size sent concurrently via .batch(). Returned items keep their original
         (global) index into message_texts.
         """
-        pre_filtered_messages = filter_out_unnecessary_messages(message_texts)
+        pre_filtered_messages = filter_out_invalid_messages(message_texts)
         #chunks = [pre_filtered_messages[i:i + batch_size] for i in range(0, len(pre_filtered_messages), batch_size)]
 
         structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchStateLLM)
@@ -79,35 +83,34 @@ async def classify_messages(node_llm,
         return results
 
 
-def create_message_filter_agent(node_llm,
-                                system_prompt: str,
+def create_message_filter_agent(node_llm : LLM,
+                                tool_llm : LLM, 
+                                prompt_template: ChatPromptTemplate,
+                                tools: List[ToolSpec] | None,
                                 batch_size: int = 5,
-                                max_concurrency: int = 4,
-                                prompt_version: str = "0"):
+                                max_concurrency: int = 4):
 
-    prompt_template = ChatPromptTemplate.from_messages([("system", system_prompt), 
-                                                        ("human", "{input}")])
+  
 
+    # def seed_dataset_to_db(thread_id: str, 
+    #                        all_items: List[FilterMessageItem]):
+    #     """
+    #     The filered messages are logged to the database for future fine-tuning. 
+    #     This function attempts to log the filtered messages to the database, 
+    #     and any exceptions during this process are caught and logged without interrupting the main flow.
+    #     """
+    #     if os.getenv("POSTGRES_Dataset_Update", "true") == "true":
+    #         try:
+    #             from track_issue_system.finetune.db import store_filtered_message_db
+    #             store_filtered_message_db(model_name=node_llm.model_name,
+    #                                       prompt_version=prompt_version,
+    #                                       thread_id=thread_id,
+    #                                       items=all_items)
+    #         except Exception as e:
+    #             logger.error(f'message_filter_agent logging error => {e}')
 
-    def seed_dataset_to_db(thread_id: str, 
-                           all_items: List[FilterMessageItem]):
-        """
-        The filered messages are logged to the database for future fine-tuning. 
-        This function attempts to log the filtered messages to the database, 
-        and any exceptions during this process are caught and logged without interrupting the main flow.
-        """
-        if os.getenv("POSTGRES_Dataset_Update", "true") == "true":
-            try:
-                from track_issue_system.finetune.db import filtered_message_log_predictions
-                filtered_message_log_predictions(model_name=node_llm.model_name,
-                                                prompt_version=prompt_version,
-                                                thread_id=thread_id,
-                                                items=all_items)
-            except Exception as e:
-                logger.error(f'message_filter_agent logging error => {e}')
-
-        else:
-            logger.info("POSTGRES_Dataset_Update is set to false, skipping logging to database.")
+    #     else:
+    #         logger.info("POSTGRES_Dataset_Update is set to false, skipping logging to database.")
 
 
     
@@ -121,44 +124,111 @@ def create_message_filter_agent(node_llm,
 
         logger.info("message filter agent run")
 
+        state_model, original_was_model = normalize_state(state)
+
+
         messages = state.messages[-1]
         if isinstance(messages, ToolMessage):
             messages = messages.content
 
-        try:
-            message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
-
-            if not message_texts:
-                logger.info("[message_filter_agent] => No meessages passed")
-                return state.model_copy(update={"messages": json.dumps([]),
-                                                "messages_filtered":True})
-
-            all_items = await classify_messages(node_llm,
-                                          prompt_template,
-                                          message_texts,
-                                          batch_size=batch_size,
-                                          max_concurrency=max_concurrency)
-
-            # feed the data into database for future fine-tuning
-            seed_dataset_to_db(state.thread_id,
-                               all_items)
-        except Exception as e:
-            logger.error(f'message_filter_agent error => {e}')
-            return state.model_copy(update={"filtered_messages": [],
-                                             "messages_filtered": False})
-
-      
-
-        # relevant_indices = sorted(
-        #     item.index for item in all_items
-        #     if item.not_cleaned_message and 0 <= item.index < len(message_texts)
-        # )
-        # final_cleaned_messages = [message_texts[i] for i in relevant_indices]
-
-        filtered = FilterMessageBatchState(items=all_items)
         
-        return state.model_copy(update={"filtered_message": filtered, 
-                                        "messages_filtered": True})
+        message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
+
+        if not message_texts:
+            logger.info("[message_filter_agent] => No meessages passed")
+            return state.model_copy(update={"messages": json.dumps([]),
+                                            "messages_filtered":True})
+
+        all_items = await classify_messages(node_llm,
+                                        prompt_template,
+                                        message_texts,
+                                        batch_size=batch_size,
+                                        max_concurrency=max_concurrency)
+
+        state.model_copy(update={
+            "filtered_message" : all_items
+        })
+
+        # feed the data into database for future fine-tuning
+        tool_system_prompt = ""
+        tool_llm.bind_tools([tools], 
+                            tool_required=True)
+
+        eligible_tool_spec = next(t for t in get_current_eligible_tools(tool_specs= tools, 
+                                                        tool_states=state.tool_states))
+        active_tool_spec = next(t for t in tools if t.name == eligible_tool_spec.name)
+
+        system_promt = prompt_hub.get_prompt(prompt_type=PromptType.MESSAGEFILTER,
+                                name=eligible_tool_spec.name,
+                                version_id=active_tool_spec.prompt_template_version,
+                                tags=active_tool_spec.prompt_template_tags).as_string_message()
+        
+        tool_prompt =  ChatPromptTemplate.from_messages([("system", system_promt)])\
+                                            .format_messages()
+
+        response = tool_llm.invoke(system_message=tool_prompt)
+        tool_calls = getattr(response, "tool_calls", None) or []
+
+        problems = []
+        new_messages = []
+
+        if not tool_calls:
+            problems.append("Not have any tool to be called")
+
+        # # argument validation
+        for call in tool_calls:
+        #     _call = call[0] if isinstance(call, List) else call
+        #     spec = next(t for t in tools if call['name'] == t.name)
+
+        #     if spec is None:
+        #         problems.append(f"Unknown tool '{_call['name']}'")
+        #     elif spec.tool.tool_call_schema is not None:
+        #         try:
+        #             spec.tool.tool_call_schema.model_validate(call['args'])
+        #         except Exception as e:
+        #             problems.append(f"Invalid args for '{_call['name']}': {e}")
+            try:
+                attempt = next_attempt_number(active_tool_spec.name, 
+                                                        state.tool_states)
+                    
+                tool_result = await active_tool_spec.tool.ainvoke(call['args'])
+                tool_state = ToolState(
+                                    query=call.get("query",""),
+                                    tool_name = active_tool_spec.name,
+                                    tool_args = call['args'],
+                                    tool_result = tool_result,
+                                    status="success",
+                                    attempt=attempt
+                                )
+            except Exception as e:
+                logger.warning("planner_agent: tool %r failed (attempt %d): %s", active_tool_spec.name, attempt, e)
+                tool_state = ToolState(
+                    query=call.get("query",""),
+                    tool_name = active_tool_spec.name,
+                    tool_args = call['args'],
+                    tool_result=None,
+                    status="failed", 
+                    attempt=attempt, 
+                    error=str(e))
+
+            if tool_state.status == "success":
+                if isinstance(tool_state.tool_result, list):
+                    tool_content = [m.get('text', "") if isinstance(m, dict) else m for m in tool_state.tool_result]
+                else:
+                    tool_content = str(tool_state.tool_result)
+
+                new_messages.append(ToolMessage(
+                    content=tool_content,
+                    tool_call_id=call["id"],
+                    name=call["name"]))
+            
+        updated_node_trace = state.node_traces.copy()
+        updated_state = state.model_copy(update={
+                                "tool_states": state.tool_states + [tool_state],
+                                "node_traces": updated_node_trace,
+                                "messages": new_messages,
+                            })
+        return wrap_state(updated_state, original_was_model)
         
 
     return message_filter_agent

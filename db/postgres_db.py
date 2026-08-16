@@ -1,10 +1,7 @@
 import os
 import psycopg2
 
-from dotenv import load_dotenv
 from contextlib import contextmanager
-
-load_dotenv()
 
 
 def connection_params() -> dict:

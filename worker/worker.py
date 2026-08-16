@@ -4,7 +4,6 @@
 import logging
 import time
 import os
-from dotenv import load_dotenv
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 
@@ -23,8 +22,6 @@ try:
 except Exception:
     LANGSMITH_AVAILABLE = False
 
-
-load_dotenv()
 
 class Worker:
 

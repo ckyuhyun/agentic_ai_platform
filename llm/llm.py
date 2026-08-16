@@ -1,7 +1,6 @@
 import os
 import httpx
 import json
-from dotenv import load_dotenv
 from typing import List, Any
 from tenacity import (
     retry,
@@ -76,10 +75,8 @@ _llm_call_retry = retry(
 
 
 class LLM:
-    def __init__(self, 
+    def __init__(self,
                  model_name: str):
-        load_dotenv()
-
         self.model_name = model_name
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
         self.VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
@@ -174,7 +171,7 @@ class LLM:
 
 
     
-    def invoke(self, 
+    async def invoke(self, 
              system_message: str = None,
              human_message: str = None,
              config : dict = None) -> str:
@@ -188,7 +185,7 @@ class LLM:
         if human_message:
             message.append(HumanMessage(content=human_message))
 
-        response =self.llm_instance.ainvoke(message,
+        response = await self.llm_instance.ainvoke(message,
                                            config=config)
         return response
 

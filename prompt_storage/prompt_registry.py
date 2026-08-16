@@ -25,7 +25,7 @@ class SystemPromptVersion:
     description: str               = ""
     created_at: datetime           = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime           = field(default_factory=lambda: datetime.now(timezone.utc))
-    tags: List[str]                = field(default_factory=list)
+    tag: str                = field(default_factory=str)
 
     def as_system_messages(self) -> List[SystemMessage]:
         """Return as a LangChain message list ready to prepend to a prompt."""
@@ -37,7 +37,7 @@ class SystemPromptVersion:
     def __repr__(self) -> str:
         return (
             f"PromptVersion(type={self.prompt_type!r}, version={self.version_id!r}, "
-            f"created={self.created_at.strftime('%Y-%m-%d')}, tags={self.tags})"
+            f"created={self.created_at.strftime('%Y-%m-%d')}, tag={self.tag})"
         )
 
 
@@ -73,15 +73,15 @@ class PromptRegistry:
         self.prompts_storage: Dict[str, List[SystemPromptVersion]] = {}        
         self.prompt_id : str
         self.register_func: Callable[[PromptType, str, str, str, Optional[List[str]]], None] = None
-        self.getprompt_func : Callable[[PromptType, Optional[str],  Optional[List[str]]], SystemPromptVersion] = None
+        self.getprompt_func : Callable[[PromptType, str | None,  str | None], SystemPromptVersion] = None
         self.smith_client = Client()
 
     def register(self,
                  prompt_type: PromptType,
                  version_id: str,
                  promptTempate : ChatPromptTemplate ,
-                 description: str = "",
-                 tags: Optional[List[str]]= []) -> None:
+                 description: str | None = "",
+                 tag: str | None = "") -> None:
 
         
         if self.is_register_to_langsmith:
@@ -98,15 +98,15 @@ class PromptRegistry:
                                 version_id=version_id,
                                 prompt=system_prompt,
                                 description=description,
-                                tags=tags)
+                                tag=tag)
         
 
     def register_with_str_prompt(self,
                  prompt_type: PromptType,
                  version_id: str,
                  prompt: str,
-                 description: str = "",
-                 tags: Optional[List[str]]= []) -> None:
+                 description: str | None = "",
+                 tag: str | None = "") -> None:
         """
         register the prompt either to local or langsmith 
         """
@@ -119,12 +119,12 @@ class PromptRegistry:
                             version_id=version_id,
                             prompt=prompt,
                             description=description,
-                            tags=tags)
+                            tag=tag)
 
     def get_prompt(self,
                    prompt_type: PromptType,
-                   version_id: Optional[str] = None,
-                   tags: Optional[List[str]] = None) -> SystemPromptVersion:
+                   version_id: str | None  = "",
+                   tag: str | None = "") -> SystemPromptVersion:
         if self.is_register_to_langsmith:
             self.getprompt_func = self.__get_prompt_from_langsmith__
         else:
@@ -132,15 +132,15 @@ class PromptRegistry:
 
         return self.getprompt_func(prompt_type, 
                                    version_id,
-                                   tags)
+                                   tag)
 
 
     def __register_to_langsmith__(self,
                               prompt_type: PromptType,
                               version_id: str,
                             prompt: str,
-                            description: str = "",
-                            tags: Optional[List[str]]= []) -> None:
+                            description: str | None = "",
+                            tag: str | None = "") -> None:
         """
         parameters:
         - prompt : only system prompt allowed
@@ -161,8 +161,8 @@ class PromptRegistry:
                  prompt_type: PromptType,
                  version_id: str,
                  prompt: str,
-                 description: str = "",
-                 tags: Optional[List[str]]= []) -> None:
+                 description: str | None = "",
+                 tag: str | None = "") -> None:
 
         try:
             prompt_version = SystemPromptVersion(
@@ -170,7 +170,7 @@ class PromptRegistry:
                 version_id=version_id,
                 system_prompt=prompt,
                 description=description,
-                tags=tags,
+                tag=tag,
             )
             self.prompts_storage.setdefault(prompt_type, []).append(prompt_version)
         except:
@@ -179,8 +179,8 @@ class PromptRegistry:
         
     def __get_prompt_from_langsmith__(self,
                                       prompt_type: PromptType,
-                                      version_id: Optional[str] = None,
-                                      tags: Optional[List[str]] = None) -> SystemPromptVersion:
+                                      version_id: str | None = "",
+                                      tag: str | None = "") -> SystemPromptVersion:
         fetched_prompt = self.smith_client.pull_prompt(self.__get_prompt_id__())
         system_prompt = next(
             (m for m in fetched_prompt.messages if isinstance(m, SystemMessagePromptTemplate)), 
@@ -189,17 +189,17 @@ class PromptRegistry:
         return SystemPromptVersion(
             prompt_type=prompt_type,
             version_id=version_id,
-            tags=tags,
+            tag=tag,
             system_prompt=system_prompt
         )
 
     def __get_prompt_by_type_version_tags__(self,
                     prompt_type: PromptType,
-                    version_id: Optional[str] = None,
-                    tags: Optional[List[str]] = None) -> SystemPromptVersion:
+                    version_id: str | None = "",
+                    tag: str | None = "") -> SystemPromptVersion:
 
         prompt_type_value = self.prompts_storage.get(prompt_type, {})
-
+        
 
         if version_id is not None:
             prompt_version_value = [d for d in prompt_type_value if d.version_id == version_id]
@@ -207,7 +207,13 @@ class PromptRegistry:
                 raise ValueError(f"No prompt found for type {prompt_type} with version {version_id}")
             
             if len(prompt_version_value) > 1:
-                raise ValueError(f"Multiple prompts found for type {prompt_type} with version {version_id}")
+                prompt_version_value = [d for d in prompt_version_value if tag == d.tag ]
+
+                if len(prompt_version_value) == 0:
+                    raise ValueError(f"No prompt found for type {prompt_type} with version :{version_id} and tag :{tag}")
+
+                if len(prompt_version_value) > 1:
+                    raise ValueError(f"Multiple prompts found for type {prompt_type} with version {version_id}")
         else:
             pass
 
