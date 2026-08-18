@@ -31,6 +31,3 @@ class FilterMessageItem(BaseModel):
     cleaned_message : Annotated[str, Field(..., description="original message")]
     #is_relevant : bool = Field(..., description="True if the message mentioned any issue they found otherwise False")
 
-
-class FilterMessageBatchState(BaseModel):
-    items: Annotated[List[FilterMessageItem], Field(default_factory=list, description="classification result for each input message, one item per message")]

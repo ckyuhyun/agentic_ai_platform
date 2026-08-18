@@ -8,7 +8,7 @@ from agentic_ai_platform.states.hallucination_signal_state import HallucinationC
 from agentic_ai_platform.states.plan_state import PlanState
 from agentic_ai_platform.states.queryState import QueryState
 from agentic_ai_platform.states.tool_state import ToolState
-from agentic_ai_platform.states.filter_message_state import FilterMessageBatchState
+from agentic_ai_platform.states.filter_message_state import FilterMessageItem
 
 
 class NodeTrace(BaseModel):
@@ -70,7 +70,7 @@ class AbstractSuperviseState(BaseModel):
     # Observability/eval identifiers, set once when the run starts and carried
     # unchanged through every node so LLM calls, tool calls, and stored records
     # can be grouped and replayed by run.
-    thread_id : Annotated[Optional[str], Field(
+    thread_id : Annotated[str, Field(
          default=None, description="Thread Id of this graph runthread id")]
 
     # state_id: Optional[str] = Field(
@@ -93,7 +93,7 @@ class AbstractSuperviseState(BaseModel):
     messages_filtered : Annotated[bool, Field(
             default=False, description="if the slack messages filtered out to remove unnecessary messages, return True")]
 
-    filtered_message : Annotated[FilterMessageBatchState, Field(default = None,  description="filtered message with different aspect - blacklist, hallucination, safty etc")]
+    filtered_message : Annotated[List[FilterMessageItem], Field(default_factory = list,  description="filtered message with different aspect - blacklist, hallucination, safty etc")]
 
 
 
