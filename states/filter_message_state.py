@@ -9,7 +9,6 @@ class FilterMessageItemLLM(BaseModel):
     doesn't have to re-emit the full original text per item, which was blowing
     past small local models' completion-token budget on batched requests.
     """
-    index: Annotated[int , Field(..., description="the index of the message in the input list")]
     scoring : Annotated[float, Field(...,
                                      ge=0.0,
                                      le=1.0,
@@ -17,8 +16,8 @@ class FilterMessageItemLLM(BaseModel):
     reasoning: Annotated[str, Field(..., description="the reasoning behind why the message is relevant to any issue they found")]
 
 
-class FilterMessageBatchStateLLM(BaseModel):
-    items: Annotated[List[FilterMessageItemLLM], Field(default_factory=list, description="classification result for each input message, one item per message")]
+# class FilterMessageBatchStateLLM(BaseModel):
+#     items: Annotated[List[FilterMessageItemLLM], Field(default_factory=list, description="classification result for each input message, one item per message")]
 
 
 class FilterMessageItem(BaseModel):

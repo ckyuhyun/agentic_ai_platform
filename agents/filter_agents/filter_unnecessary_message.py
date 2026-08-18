@@ -11,7 +11,7 @@ from agentic_ai_platform.data_class.tool_spec import ToolSpec
 from agentic_ai_platform.enum.prompt_type import PromptType
 from agentic_ai_platform.llm.llm import LLM
 from agentic_ai_platform.tools.tool_hub import get_current_eligible_tools,  next_attempt_number
-from agentic_ai_platform.states.filter_message_state import FilterMessageItem, FilterMessageBatchStateLLM
+from agentic_ai_platform.states.filter_message_state import FilterMessageItem, FilterMessageItemLLM
 from agentic_ai_platform.states.tool_state import ToolState
 from track_issue_system import prompt_hub
 from track_issue_system.agents.state_utils import normalize_state, wrap_state
@@ -47,38 +47,38 @@ async def classify_messages(node_llm,
         batch_size sent concurrently via .batch(). Returned items keep their original
         (global) index into message_texts.
         """
-        pre_filtered_messages = filter_out_invalid_messages(message_texts)
+        
+        pre_filtered_messages = filter_out_invalid_messages(set(message_texts))
         #chunks = [pre_filtered_messages[i:i + batch_size] for i in range(0, len(pre_filtered_messages), batch_size)]
 
-        structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageBatchStateLLM)
+        structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageItemLLM)
 
         results: List[FilterMessageItem] = []
+        prompts = []
         for chunk_index, chunk in enumerate(pre_filtered_messages):
             # offset = chunk_index * batch_size
             # joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
             prompt = prompt_template.format_messages(input=chunk)
+            prompts.append(prompt)
 
-            try:
-                response = await structured_llm.abatch([prompt], config={"max_concurrency": max_concurrency})
-            except Exception as e:
-                # A single chunk failing (e.g. the model's completion got cut off
-                # before it could finish the JSON) shouldn't discard results
-                # already collected from other chunks.
-                logger.error(f'classify_messages chunk {chunk_index} error => {e}')
-                continue
+        try:
+            response = await structured_llm.abatch(prompts, config={"max_concurrency": max_concurrency})
+        except Exception as e:
+            # A single chunk failing (e.g. the model's completion got cut off
+            # before it could finish the JSON) shouldn't discard results
+            # already collected from other chunks.
+            logger.error(f'classify_messages chunk {chunk_index} error => {e}')
+            
 
-            for batch_result in response:
-                for llm_item in batch_result.items:
-                    if not (0 <= llm_item.index <= len(pre_filtered_messages)):
-                        continue
-                    # index from llm seems starting with 1
-                    message_index = llm_item.index-1 
-                    results.append(FilterMessageItem(
-                        index=llm_item.index,
-                        scoring=llm_item.scoring,
-                        reasoning=llm_item.reasoning,
-                        cleaned_message=pre_filtered_messages[message_index],
-                    ))
+        for index, batch_result in enumerate(response):
+                # index from llm seems starting with 
+                message_index = index
+                results.append(FilterMessageItem(
+                    index=message_index,
+                    scoring=batch_result.scoring,
+                    reasoning=batch_result.reasoning,
+                    cleaned_message=pre_filtered_messages[message_index],
+                ))
 
         return results
 
