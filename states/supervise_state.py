@@ -1,5 +1,5 @@
 import operator
-import time
+
 from typing import Annotated, Optional, List, Union
 from pydantic import BaseModel, Field, model_validator
 from langgraph.graph.message import add_messages
@@ -9,34 +9,7 @@ from agentic_ai_platform.states.plan_state import PlanState
 from agentic_ai_platform.states.queryState import QueryState
 from agentic_ai_platform.states.tool_state import ToolState
 from agentic_ai_platform.states.filter_message_state import FilterMessageItem
-
-
-class NodeTrace(BaseModel):
-    """Execution record written by each node for trace-based evaluation."""
-    node: Annotated[str, Field(description="Node name")]
-    iteration: Annotated[int, Field(description="recycle index of node calling")]
-    started_at: Annotated[float, Field(default_factory=time.time)]
-    latency_ms: Annotated[float, Field(default=0.0)]
-    model: Annotated[str, Field(default="")]
-    tool_calls_made: Annotated[List[str], Field(default_factory=list)]
-    draft_len: Annotated[Optional[int], Field(default=None)]
-    score: Annotated[Optional[float], Field(default=None)]
-    approved: Annotated[Optional[bool], Field(default=None)]
-    issue_count: Annotated[Optional[int], Field(default=None)]
- 
-    @staticmethod
-    def start(node: str, 
-              iteration: int, 
-              model: str = "") -> "NodeTrace":
-        return NodeTrace(node=node, iteration=iteration, model=model)    
-    
-
-    def finish(self, 
-               **kwargs) -> "NodeTrace":
-        self.latency_ms = (time.time() - self.started_at) * 1000
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-        return self
+from agentic_ai_platform.graph.node_trace import NodeTrace
 
 
 
@@ -100,9 +73,7 @@ class AbstractSuperviseState(BaseModel):
 class SuperviseState(AbstractSuperviseState):
     """State shared between the drafter and critic nodes."""
 
-    # Task definition
-    task: Annotated[str, operator.add] = Field(
-        description="The task or prompt the drafter must complete")   
+    
     
     query_state : Annotated[QueryState, Field(
         default_factory=QueryState, description="State related to query rewriting and generation")]

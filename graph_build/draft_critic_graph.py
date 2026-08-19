@@ -37,7 +37,7 @@ def route(state: SuperviseState) -> str:
 
 def human_review_node(state: SuperviseState) -> SuperviseState:
     print("\n── Human Review Required ─────────────────────────")
-    print(f"Task: {state.task}")
+    print(f"Task: {state.last_run_task}")
     print(f"Draft: {state.draft}")
     if state.critique:
         print(f"Critique score: {state.critique.score:.2f}")

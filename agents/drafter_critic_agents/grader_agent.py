@@ -59,7 +59,7 @@ def create_grader_agent(
         # prompt = system_prompt + [
         #     HumanMessage(content=_build_eval_message(state, tool_reports)),
         # ]
-        prompt = system_prompt + [HumanMessage(content=f"Task:\n{state.task}\n\nDraft:\n{state.draft}")]
+        prompt = system_prompt + [HumanMessage(content=f"Task:\n{state.last_run_task}\n\nDraft:\n{state.draft}")]
 
         critic_llm = graph_llm.bind_tools(eval_tools)
         try:
@@ -119,13 +119,13 @@ def _build_tool_input(tool: BaseTool, state: SuperviseState) -> dict:
     """Return the correct input dict for a given grader tool."""
     key = _TOOL_INPUT.get(tool.name, "draft")
     if key == "content":
-        return {"content": f"TASK: {state.task}\nDRAFT: {state.draft}"}
+        return {"content": f"TASK: {state.last_run_task}\nDRAFT: {state.draft}"}
     return {"draft": state.draft or ""}
 
 
 def _build_eval_message(state: SuperviseState, tool_reports: dict[str, str]) -> str:
     base = (
-        f"Original task:\n{state.task}\n\n"
+        f"Original task:\n{state.last_run_task}\n\n"
         f"Draft to evaluate:\n{state.draft}\n\n"
         f"Approval threshold: {state.graph_config.approval_threshold}"
     )

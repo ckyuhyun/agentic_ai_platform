@@ -33,11 +33,11 @@ def create_drafter_agent(schema: Type[BaseModel],
         messages.append(SystemMessage(content=state.system_prompt or ""))
 
         if state.iteration == 0 or state.critique is None:
-            messages.append(HumanMessage(content=f"Task:\n{state.task}"))
+            messages.append(HumanMessage(content=f"Task:\n{state.last_run_task}"))
         else:
             critique = state.critique
             revision_prompt = (
-                f"Task:\n{state.task}\n\n"
+                f"Task:\n{state.last_run_task}\n\n"
                 f"Your previous draft:\n{state.draft}\n\n"
                 f"Critic score: {critique.score:.2f}\n"
                 f"Issues:\n" + "\n".join(f"- {i}" for i in critique.issues) + "\n\n"

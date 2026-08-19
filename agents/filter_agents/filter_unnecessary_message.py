@@ -1,7 +1,7 @@
 import json
 import os
 from typing import List, Any
-from langchain.messages import ToolMessage
+from langchain.messages import ToolMessage, HumanMessage
 
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -13,8 +13,69 @@ from agentic_ai_platform.llm.llm import LLM
 from agentic_ai_platform.tools.tool_hub import get_current_eligible_tools,  next_attempt_number
 from agentic_ai_platform.states.filter_message_state import FilterMessageItem, FilterMessageItemLLM
 from agentic_ai_platform.states.tool_state import ToolState
-from track_issue_system import prompt_hub
+from agentic_ai_platform.graph.node_trace import NodeTrace
+
+
 from track_issue_system.agents.state_utils import normalize_state, wrap_state
+
+
+_MAX_SELF_CORRECTION_ATTEMPTS = 2
+
+
+async def _invoke_tool_with_self_correction(tool_llm: LLM,
+                                             prompt_messages: List[Any],
+                                             active_tool_spec: ToolSpec) -> List[dict]:
+    """
+    Invoke tool_llm forcing a call to active_tool_spec, re-prompting up to
+    _MAX_SELF_CORRECTION_ATTEMPTS times if the model fails to produce a
+    valid tool call. Small local models forced (via tool_choice="required")
+    into emitting a call with a nontrivial nested-argument schema (e.g.
+    seed_dataset_to_db's List[FilterMessageItem]) don't always comply on the
+    first try -- see planner_agent.py's _invoke_tool_with_self_correction
+    for the same pattern.
+    """
+    messages = list(prompt_messages)
+    tool_calls: List[dict] = []
+
+    for correction_attempt in range(1, _MAX_SELF_CORRECTION_ATTEMPTS + 1):
+        response = await tool_llm.invoke_by_single_prompt(system_human_message=messages)
+
+        # invoke_by_single_prompt returns a single AIMessage-like response
+        # when the prompt fits within TOKEN_LIMIT, but a List of responses
+        # (one per chunk) when it had to fall back to _batch_invoke -- flatten
+        # both shapes into one list of tool calls instead of silently
+        # dropping them.
+        if hasattr(response, "tool_calls"):
+            tool_calls = getattr(response, "tool_calls", None) or []
+        else:
+            tool_calls = [call for r in (response or []) for call in (getattr(r, "tool_calls", None) or [])]
+
+        problems = []
+        if not tool_calls:
+            problems.append("Not have any tool to be called")
+
+        for call in tool_calls:
+            if call["name"] != active_tool_spec.name:
+                problems.append(f"Unknown tool '{call['name']}'; expected '{active_tool_spec.name}'.")
+            elif active_tool_spec.tool.tool_call_schema is not None:
+                try:
+                    active_tool_spec.tool.tool_call_schema.model_validate(call["args"])
+                except Exception as e:
+                    problems.append(f"Invalid args for '{call['name']}': {e}")
+
+        if not problems:
+            return tool_calls
+
+        logger.warning("message_filter_agent: self-correction attempt %d/%d failed: %s",
+                        correction_attempt, _MAX_SELF_CORRECTION_ATTEMPTS, problems)
+        messages = messages + [HumanMessage(
+            content="Your previous response was invalid: " + " ".join(problems) +
+                    f" Call the '{active_tool_spec.name}' tool with valid arguments."
+        )]
+
+    logger.warning("message_filter_agent: giving up on tool '%s' after %d self-correction attempts",
+                    active_tool_spec.name, _MAX_SELF_CORRECTION_ATTEMPTS)
+    return tool_calls
 
 
 def filter_out_invalid_messages(messages: List[str]) -> List[dict]:
@@ -54,12 +115,10 @@ async def classify_messages(node_llm,
         structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageItemLLM)
 
         results: List[FilterMessageItem] = []
-        prompts = []
-        for chunk_index, chunk in enumerate(pre_filtered_messages):
-            # offset = chunk_index * batch_size
-            # joined_str = "\n".join(f"{offset + i}: {text}" for i, text in enumerate(chunk))
-            prompt = prompt_template.format_messages(input=chunk)
-            prompts.append(prompt)
+        prompts = [
+            prompt_template.format_messages(input=f'{chunk_index} : {chunk}')
+            for chunk_index, chunk in enumerate(pre_filtered_messages)
+        ]
 
         try:
             response = await structured_llm.abatch(prompts, config={"max_concurrency": max_concurrency})
@@ -67,15 +126,16 @@ async def classify_messages(node_llm,
             # A single chunk failing (e.g. the model's completion got cut off
             # before it could finish the JSON) shouldn't discard results
             # already collected from other chunks.
-            logger.error(f'classify_messages chunk {chunk_index} error => {e}')
-            
+            logger.error(f'classify_messages error => {e}')
+            response = []
+
 
         for index, batch_result in enumerate(response):
                 # index from llm seems starting with 
                 message_index = index
                 results.append(FilterMessageItem(
                     index=message_index,
-                    scoring=batch_result.scoring,
+                    scoring=batch_result. scoring,
                     reasoning=batch_result.reasoning,
                     cleaned_message=pre_filtered_messages[message_index],
                 ))
@@ -126,6 +186,9 @@ def create_message_filter_agent(node_llm : LLM,
 
         state_model, original_was_model = normalize_state(state)
 
+        trace = NodeTrace.start(node="message_filter_agent", 
+                                        iteration=state_model.iteration, 
+                                        model=node_llm.model_name)
 
         messages = state.messages[-1]
         if isinstance(messages, ToolMessage):
@@ -165,15 +228,18 @@ def create_message_filter_agent(node_llm : LLM,
             human_vars = {**human_vars, "messages": all_items, "thread_id": state_model.thread_id}
             prompt_messages = active_tool_spec.prompt_template.format_messages(**human_vars)
 
-            response = await tool_llm.invoke_by_single_prompt(system_human_message=prompt_messages)
-            tool_calls = getattr(response, "tool_calls", None) or []
+            tool_calls = await _invoke_tool_with_self_correction(tool_llm=tool_llm,
+                                                                   prompt_messages=prompt_messages,
+                                                                   active_tool_spec=active_tool_spec)
 
-            problems = []
             new_messages = []
 
             if not tool_calls:
-                problems.append("Not have any tool to be called")
+                logger.warning("message_filter_agent: no valid tool call for '%s' after self-correction; "
+                                "skipping tool invocation for thread_id=%s",
+                                active_tool_spec.name, state_model.thread_id)
 
+            tool_states : List[ToolState] = []
             # # argument validation
             for call in tool_calls:
             #     _call = call[0] if isinstance(call, List) else call
@@ -213,6 +279,8 @@ def create_message_filter_agent(node_llm : LLM,
                         attempt=attempt,
                         error=str(e))
 
+                tool_states.append(tool_state)
+
                 if tool_state.status == "success":
                     if isinstance(tool_state.tool_result, list):
                         tool_content = [m.get('text', "") if isinstance(m, dict) else m for m in tool_state.tool_result]
@@ -223,17 +291,25 @@ def create_message_filter_agent(node_llm : LLM,
                         content=tool_content,
                         tool_call_id=call["id"],
                         name=call["name"]))
+
+            # Trace node update
+
+            
+
             
             updated_node_trace = state.node_traces.copy()
+            updated_node_trace.append(trace.finish(tool_calls_made = [c["name"] for c in tool_calls]))
+            
+            
         
             updated_state = state.model_copy(update={
-                                    "tool_states": state.tool_states + [tool_state],
+                                    "tool_states": state.tool_states + tool_states,
                                     "node_traces": updated_node_trace,
                                     "filtered_message" : all_items,
                                     "messages": new_messages,
                                     "messages_filtered" : True
                                 })
-        
+    
         else:
             updated_node_trace = state.node_traces.copy()
             updated_state = state.model_copy(update={
