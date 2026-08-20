@@ -224,7 +224,7 @@ class LLM:
                 model=_VLLM_MODELS[self.model_name],
                 base_url=self.VLLM_BASE_URL,
                 api_key="EMPTY",
-                temperature=0,
+                temperature=0.7,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS, # Wait up for a response
                 max_retries=DEFAULT_LLM_MAX_RETRIES, # Retry up on failure
             )
@@ -235,7 +235,7 @@ class LLM:
                 model="llama3.1:latest",
                 base_url=self.OLLAMA_BASE_URL,
                 num_ctx=8192,
-                temperature=0,
+                temperature=0.7,
                 # ChatOllama has no native max_retries; timeout is forwarded to
                 # the underlying httpx client via client_kwargs.
                 client_kwargs={"timeout": DEFAULT_LLM_TIMEOUT_SECONDS},
@@ -249,7 +249,7 @@ class LLM:
         else:
             model = init_chat_model(
                 model=self.model_name,
-                temperature=0,
+                temperature=0.7,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,# Wait up for a response
                 max_retries=DEFAULT_LLM_MAX_RETRIES,# Retry up on failure
             )
