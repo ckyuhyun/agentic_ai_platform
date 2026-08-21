@@ -19,15 +19,6 @@ from langchain.chat_models import init_chat_model
 from agentic_ai_platform import logger
 
 
-
-
-# Opt-in alias -> actual model id served by the local vllm-engine container
-# (see agentic_ai_platform/docker-compose.yml). Pass model_name="qwen2.5-local"
-# to route through it instead of Claude/Ollama.
-_VLLM_MODELS = {
-    "qwen2.5-local": "Qwen/Qwen2.5-1.5B-Instruct",
-}
-
 # Request-level resilience defaults, overridable via env without a code change.
 DEFAULT_LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "60"))
 DEFAULT_LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
@@ -196,14 +187,13 @@ class LLM:
         Estimate the number of tokens in the given text.
 
         Uses the ~4-characters-per-token rule of thumb (OpenAI's own guidance
-        for English text) instead of a model-specific tokenizer, since local/
-        Ollama/vLLM models (e.g. qwen2.5-local) have no tiktoken encoding.
+        for English text) instead of a model-specific tokenizer.
         """
-        
+        llm_model = os.getenv("LLM_Model")
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{self.VLLM_BASE_URL.removesuffix('/v1')}/tokenize",
-                json={"model": _VLLM_MODELS[self.model_name], "prompt": text},
+                json={"model": llm_model, "prompt": text},
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
                 )
             resp.raise_for_status()
@@ -216,12 +206,15 @@ class LLM:
         
     
     def _llm_model_init_(self):
-        _local_docker_llm_models = {"llama3", "llama3.1", "llama3.2", "mistral", "gemma", "phi3", "qwen2"}
+        _local_docker_llm_models = {"llama3", "llama3.1", "llama3.2", "mistral", "gemma", "phi3"}
 
         model = None
-        if self.model_name in _VLLM_MODELS:
+        llm_model_key = os.getenv("LLM_Model_Key")        
+        llm_model = os.getenv("LLM_Model")
+
+        if self.model_name in llm_model_key:
             model = ChatOpenAI(
-                model=_VLLM_MODELS[self.model_name],
+                model=llm_model,
                 base_url=self.VLLM_BASE_URL,
                 api_key="EMPTY",
                 temperature=0.7,

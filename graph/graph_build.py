@@ -1,6 +1,6 @@
 import json
 
-
+from pathlib import Path
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
@@ -27,7 +27,7 @@ class GraphBuild:
         self.app = None
         self.enabled_persistentMemory = enabled_persistentMemory
         self.config : Optional[RunnableConfig] = None
-        load_dotenv()
+        load_dotenv(Path(__file__).resolve().parents[2] / ".env")
         
 
     async def stream_run_graph(

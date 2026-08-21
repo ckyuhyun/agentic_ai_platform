@@ -150,31 +150,6 @@ def create_message_filter_agent(node_llm : LLM,
                                 batch_size: int = 5,
                                 max_concurrency: int = 4):
 
-  
-
-    # def seed_dataset_to_db(thread_id: str, 
-    #                        all_items: List[FilterMessageItem]):
-    #     """
-    #     The filered messages are logged to the database for future fine-tuning. 
-    #     This function attempts to log the filtered messages to the database, 
-    #     and any exceptions during this process are caught and logged without interrupting the main flow.
-    #     """
-    #     if os.getenv("POSTGRES_Dataset_Update", "true") == "true":
-    #         try:
-    #             from track_issue_system.finetune.db import store_filtered_message_db
-    #             store_filtered_message_db(model_name=node_llm.model_name,
-    #                                       prompt_version=prompt_version,
-    #                                       thread_id=thread_id,
-    #                                       items=all_items)
-    #         except Exception as e:
-    #             logger.error(f'message_filter_agent logging error => {e}')
-
-    #     else:
-    #         logger.info("POSTGRES_Dataset_Update is set to false, skipping logging to database.")
-
-
-    
-
     async def message_filter_agent(state):
         """
         This function filters out unnecessary messages from the tool states in the given state.
@@ -293,15 +268,11 @@ def create_message_filter_agent(node_llm : LLM,
                         name=call["name"]))
 
             # Trace node update
-
-            
-
-            
             updated_node_trace = state.node_traces.copy()
             updated_node_trace.append(trace.finish(tool_calls_made = [c["name"] for c in tool_calls]))
             
             
-        
+            # Update state
             updated_state = state.model_copy(update={
                                     "tool_states": state.tool_states + tool_states,
                                     "node_traces": updated_node_trace,
@@ -311,7 +282,10 @@ def create_message_filter_agent(node_llm : LLM,
                                 })
     
         else:
+            # Trace node update
             updated_node_trace = state.node_traces.copy()
+            
+            # Update state
             updated_state = state.model_copy(update={
                         "filtered_message" : all_items,
                         "node_traces": updated_node_trace,
