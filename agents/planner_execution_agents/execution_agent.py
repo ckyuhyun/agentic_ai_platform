@@ -60,6 +60,7 @@ def create_execution_agent(
                     tools_invoked.append(tool_hint)
                     state.tool_calls.append(ToolState(
                         query=tool_parameters.get("query", step_description),
+                        where="execution_agent",
                         tool_name=tool_hint,
                         tool_args=tool_parameters,
                         tool_result=tool_result,

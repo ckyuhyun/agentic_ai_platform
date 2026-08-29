@@ -56,6 +56,7 @@ def create_drafter_agent(schema: Type[BaseModel],
                 tools_invoked.append(call["name"])
                 state.tool_calls.append(ToolState(
                     query=call["args"].get("query", ""),
+                    where="create_drafter_agent",
                     tool_name=call["name"],
                     tool_args=call["args"],
                     tool_result=tool_result,

@@ -1,5 +1,5 @@
 import json
-
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
@@ -21,6 +21,7 @@ except Exception:
 StreamMode = Literal["values", "messages", "custom", "updates"]
 
 
+
 class GraphBuild:
     def __init__(self, 
                  enabled_persistentMemory=False):
@@ -28,6 +29,7 @@ class GraphBuild:
         self.enabled_persistentMemory = enabled_persistentMemory
         self.config : Optional[RunnableConfig] = None
         load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+        self.project_id = str(os.getenv('LANGSMITH_PROJECT_ID'))
         
 
     async def stream_run_graph(
@@ -124,18 +126,18 @@ class GraphBuild:
         # the root run on it identifies *this* run instead of the project's
         # most-recently-created root run, which could belong to a different call.
         metadata_filter = json.dumps({"thread_id": thread_id})
-
-        result = ls.runs.query(
-            trace_id=thread_id,
+        project_runs = await ls.runs.query(
+                        project_ids=[self.project_id],
+                        trace_id=thread_id,
                         is_root=True,
                         #filter=f"has(metadata, '{metadata_filter}')",
 
         )
         
-        runs = list(result)
-        if runs:
+        
+        async for run in project_runs:
             post_trace(
-                run_name=str(runs[0].id),
+                run_name=str(run[0].id),
                 node_trace= node_traces)
 
     # ── state access ──────────────────────────────────────────────────────────

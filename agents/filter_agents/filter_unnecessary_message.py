@@ -6,9 +6,7 @@ from langchain.messages import ToolMessage, HumanMessage
 
 from langchain_core.prompts import ChatPromptTemplate
 from agentic_ai_platform import logger
-from agentic_ai_platform.data_class.prompt_spec import PromptSpec
 from agentic_ai_platform.data_class.tool_spec import ToolSpec
-from agentic_ai_platform.enum.prompt_type import PromptType
 from agentic_ai_platform.llm.llm import LLM
 from agentic_ai_platform.states.filter_message_state import FilterMessageItem, FilterMessageItemLLM
 from agentic_ai_platform.graph.node_trace import NodeTrace
@@ -138,7 +136,10 @@ async def classify_messages(node_llm,
                     cleaned_message=pre_filtered_messages[message_index],
                 ))
 
-        return results
+        scoring_threadhold = float(os.getenv("Score_Threadhold","0.5"))
+        filtered_result_by_score_th = [r for r in results if r.scoring > scoring_threadhold]
+
+        return filtered_result_by_score_th
 
 
 def create_message_filter_agent(node_llm : LLM,

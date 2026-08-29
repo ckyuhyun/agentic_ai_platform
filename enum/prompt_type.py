@@ -11,6 +11,7 @@ class PromptType(str, Enum):
     MESSAGEFILTER = "Message_filter"
     MESSAGESUMMARY = "Message_summary"
     ISSUETRACK = "Issue_Track"
+    INJECTION_GUARD = "injection_guard"
 
     
 
