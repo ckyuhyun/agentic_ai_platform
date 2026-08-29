@@ -3,9 +3,12 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from rich.logging import RichHandler
+
 # agentic_ai_platform/utils/logging_config.py -> agentic_ai_platform/logs
 DEFAULT_LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+CONSOLE_LOG_FORMAT = "%(name)s - %(message)s"
 
 _configured = False
 
@@ -30,9 +33,11 @@ def setup_logging(log_dir: str | Path | None = None, level: int = logging.INFO) 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
-    console_handler = logging.StreamHandler()
+
+    console_handler = RichHandler(rich_tracebacks=True)
     console_handler.setLevel(level)
-    console_handler.setFormatter(formatter)
+    console_handler.setFormatter(logging.Formatter(CONSOLE_LOG_FORMAT))
+
     root_logger.addHandler(console_handler)
 
     file_levels = {

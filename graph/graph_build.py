@@ -124,12 +124,14 @@ class GraphBuild:
         # the root run on it identifies *this* run instead of the project's
         # most-recently-created root run, which could belong to a different call.
         metadata_filter = json.dumps({"thread_id": thread_id})
-        result = ls.list_runs(
+
+        result = ls.runs.query(
             trace_id=thread_id,
-            is_root=True,
-            #filter=f"has(metadata, '{metadata_filter}')",
-            limit=1,
+                        is_root=True,
+                        #filter=f"has(metadata, '{metadata_filter}')",
+
         )
+        
         runs = list(result)
         if runs:
             post_trace(

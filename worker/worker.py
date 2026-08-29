@@ -247,7 +247,8 @@ class LocalWorker:
 
         if not ls.has_project(project_name=project):
             ls.create_project(project_name=project)
-        
-        runs = list(ls.list_runs(project_name=project, limit=1, is_root=True))
+
+         
+        runs = list(ls.runs.query(is_root=True))
         if runs:
             post_trace(str(runs[0].id), node_traces)

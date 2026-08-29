@@ -10,9 +10,7 @@ from agentic_ai_platform.data_class.prompt_spec import PromptSpec
 from agentic_ai_platform.data_class.tool_spec import ToolSpec
 from agentic_ai_platform.enum.prompt_type import PromptType
 from agentic_ai_platform.llm.llm import LLM
-from agentic_ai_platform.tools.tool_hub import get_current_eligible_tools,  next_attempt_number
 from agentic_ai_platform.states.filter_message_state import FilterMessageItem, FilterMessageItemLLM
-from agentic_ai_platform.states.tool_state import ToolState
 from agentic_ai_platform.graph.node_trace import NodeTrace
 
 
@@ -183,116 +181,127 @@ def create_message_filter_agent(node_llm : LLM,
                                         batch_size=batch_size,
                                         max_concurrency=max_concurrency)
 
-     
-        # feed the data into database for future fine-tuning
-        if tools:
-            tool_llm.bind_tools([spec.tool for spec in tools],
-                                tool_required=True)
+        # Trace node update
+        updated_node_trace = state.node_traces.copy()
+        updated_node_trace.append(trace.finish())
+        
+        # Update state
+        updated_state = state.model_copy(update={
+                    "filtered_message" : all_items,
+                    "node_traces": updated_node_trace,
+                    "messages_filtered" : True
+                 })
 
-            eligible_tool_spec = next(t for t in get_current_eligible_tools(tool_specs= tools,
-                                                            tool_states=state.tool_states))
-            active_tool_spec = next(t for t in tools if t.name == eligible_tool_spec.name)
+        
+        # # feed the data into database for future fine-tuning
+        # if tools:
+        #     tool_llm.bind_tools([spec.tool for spec in tools],
+        #                         tool_required=True)
+
+        #     eligible_tool_spec = next(t for t in get_current_eligible_tools(tool_specs= tools,
+        #                                                     tool_states=state.tool_states))
+        #     active_tool_spec = next(t for t in tools if t.name == eligible_tool_spec.name)
 
             
-            # Snapshot of state as it will look once this node's results land --
-            # InjectedState-annotated tool params (thread_id, filtered_message)
-            # are resolved off of this, since all_items isn't part of `state` yet.
-            seed_state = state_model.model_copy(update={"filtered_message": all_items})
+        #     # Snapshot of state as it will look once this node's results land --
+        #     # InjectedState-annotated tool params (thread_id, filtered_message)
+        #     # are resolved off of this, since all_items isn't part of `state` yet.
+        #     seed_state = state_model.model_copy(update={"filtered_message": all_items})
 
-            human_vars = active_tool_spec.build_human_vars(state_model) if active_tool_spec.build_human_vars else {}
-            human_vars = {**human_vars, "messages": all_items, "thread_id": state_model.thread_id}
-            prompt_messages = active_tool_spec.prompt_template.format_messages(**human_vars)
+        #     human_vars = active_tool_spec.build_human_vars(state_model) if active_tool_spec.build_human_vars else {}
+        #     human_vars = {**human_vars, "messages": all_items, "thread_id": state_model.thread_id}
+        #     prompt_messages = active_tool_spec.prompt_template.format_messages(**human_vars)
 
-            tool_calls = await _invoke_tool_with_self_correction(tool_llm=tool_llm,
-                                                                   prompt_messages=prompt_messages,
-                                                                   active_tool_spec=active_tool_spec)
+        #     tool_calls = await _invoke_tool_with_self_correction(tool_llm=tool_llm,
+        #                                                            prompt_messages=prompt_messages,
+        #                                                            active_tool_spec=active_tool_spec)
 
-            new_messages = []
+        #     new_messages = []
 
-            if not tool_calls:
-                logger.warning("message_filter_agent: no valid tool call for '%s' after self-correction; "
-                                "skipping tool invocation for thread_id=%s",
-                                active_tool_spec.name, state_model.thread_id)
+        #     if not tool_calls:
+        #         logger.warning("message_filter_agent: no valid tool call for '%s' after self-correction; "
+        #                         "skipping tool invocation for thread_id=%s",
+        #                         active_tool_spec.name, state_model.thread_id)
 
-            tool_states : List[ToolState] = []
-            # # argument validation
-            for call in tool_calls:
-            #     _call = call[0] if isinstance(call, List) else call
-            #     spec = next(t for t in tools if call['name'] == t.name)
+        #     tool_states : List[ToolState] = []
+        #     # # argument validation
+        #     for call in tool_calls:
+        #     #     _call = call[0] if isinstance(call, List) else call
+        #     #     spec = next(t for t in tools if call['name'] == t.name)
 
-            #     if spec is None:
-            #         problems.append(f"Unknown tool '{_call['name']}'")
-            #     elif spec.tool.tool_call_schema is not None:
-            #         try:
-            #             spec.tool.tool_call_schema.model_validate(call['args'])
-            #         except Exception as e:
-            #             problems.append(f"Invalid args for '{_call['name']}': {e}")
-                #tool_args = inject_state_args(active_tool_spec.tool, call['args'], seed_state)
-                tool_args = human_vars.copy()
+        #     #     if spec is None:
+        #     #         problems.append(f"Unknown tool '{_call['name']}'")
+        #     #     elif spec.tool.tool_call_schema is not None:
+        #     #         try:
+        #     #             spec.tool.tool_call_schema.model_validate(call['args'])
+        #     #         except Exception as e:
+        #     #             problems.append(f"Invalid args for '{_call['name']}': {e}")
+        #         #tool_args = inject_state_args(active_tool_spec.tool, call['args'], seed_state)
+        #         tool_args = human_vars.copy()
                 
-                try:
-                    attempt = next_attempt_number(active_tool_spec.name,
-                                                            state.tool_states)
+        #         try:
+        #             attempt = next_attempt_number(active_tool_spec.name,
+        #                                                     state.tool_states)
 
-                    tool_result = await active_tool_spec.tool.ainvoke(tool_args)
-                    tool_state = ToolState(
-                                        query=call.get("query",""),
-                                        tool_name = active_tool_spec.name,
-                                        tool_args = tool_args,
-                                        tool_result = tool_result,
-                                        status="success",
-                                        attempt=attempt
-                                    )
-                except Exception as e:
-                    logger.warning("planner_agent: tool %r failed (attempt %d): %s", active_tool_spec.name, attempt, e)
-                    tool_state = ToolState(
-                        query=call.get("query",""),
-                        tool_name = active_tool_spec.name,
-                        tool_args = tool_args,
-                        tool_result=None,
-                        status="failed",
-                        attempt=attempt,
-                        error=str(e))
+        #             tool_result = await active_tool_spec.tool.ainvoke(tool_args)
+        #             tool_state = ToolState(
+        #                                 query=call.get("query",""),
+        #                                 tool_name = active_tool_spec.name,
+        #                                 tool_args = tool_args,
+        #                                 tool_result = tool_result,
+        #                                 status="success",
+        #                                 attempt=attempt
+        #                             )
+        #         except Exception as e:
+        #             logger.warning("planner_agent: tool %r failed (attempt %d): %s", active_tool_spec.name, attempt, e)
+        #             tool_state = ToolState(
+        #                 query=call.get("query",""),
+        #                 tool_name = active_tool_spec.name,
+        #                 tool_args = tool_args,
+        #                 tool_result=None,
+        #                 status="failed",
+        #                 attempt=attempt,
+        #                 error=str(e))
 
-                tool_states.append(tool_state)
+        #         tool_states.append(tool_state)
 
-                if tool_state.status == "success":
-                    if isinstance(tool_state.tool_result, list):
-                        tool_content = [m.get('text', "") if isinstance(m, dict) else m for m in tool_state.tool_result]
-                    else:
-                        tool_content = str(tool_state.tool_result)
+        #         if tool_state.status == "success":
+        #             if isinstance(tool_state.tool_result, list):
+        #                 tool_content = [m.get('text', "") if isinstance(m, dict) else m for m in tool_state.tool_result]
+        #             else:
+        #                 tool_content = str(tool_state.tool_result)
 
-                    new_messages.append(ToolMessage(
-                        content=tool_content,
-                        tool_call_id=call["id"],
-                        name=call["name"]))
+        #             new_messages.append(ToolMessage(
+        #                 content=tool_content,
+        #                 tool_call_id=call["id"],
+        #                 name=call["name"]))
 
-            # Trace node update
-            updated_node_trace = state.node_traces.copy()
-            updated_node_trace.append(trace.finish(tool_calls_made = [c["name"] for c in tool_calls]))
+        #     # Trace node update
+        #     updated_node_trace = state.node_traces.copy()
+        #     updated_node_trace.append(trace.finish(tool_calls_made = [c["name"] for c in tool_calls]))
             
             
-            # Update state
-            updated_state = state.model_copy(update={
-                                    "tool_states": state.tool_states + tool_states,
-                                    "node_traces": updated_node_trace,
-                                    "filtered_message" : all_items,
-                                    "messages": new_messages,
-                                    "messages_filtered" : True
-                                })
+        #     # Update state
+        #     updated_state = state.model_copy(update={
+        #                             "tool_states": state.tool_states + tool_states,
+        #                             "node_traces": updated_node_trace,
+        #                             "filtered_message" : all_items,
+        #                             "messages": new_messages,
+        #                             "messages_filtered" : True
+        #                         })
     
-        else:
-            # Trace node update
-            updated_node_trace = state.node_traces.copy()
+        # else:
+        #     # Trace node update
+        #     updated_node_trace = state.node_traces.copy()
             
-            # Update state
-            updated_state = state.model_copy(update={
-                        "filtered_message" : all_items,
-                        "node_traces": updated_node_trace,
-                        "messages_filtered" : True
-                    })
+        #     # Update state
+        #     updated_state = state.model_copy(update={
+        #                 "filtered_message" : all_items,
+        #                 "node_traces": updated_node_trace,
+        #                 "messages_filtered" : True
+        #             })
             
-
+        
         return wrap_state(updated_state, original_was_model)
         
 
