@@ -7,6 +7,7 @@ class PromptType(str, Enum):
     CRITIC = "critic"
     DRAFTER = "drafter"
     PLANNER = "planner"
+    DADTAINGESTION = "DataIngestion"
     HALLUCINATION_CHECKER = "hallucination_checker"
     MESSAGEFILTER = "Message_filter"
     MESSAGESUMMARY = "Message_summary"
