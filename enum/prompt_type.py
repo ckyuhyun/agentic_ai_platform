@@ -10,9 +10,12 @@ class PromptType(str, Enum):
     DADTAINGESTION = "DataIngestion"
     HALLUCINATION_CHECKER = "hallucination_checker"
     MESSAGEFILTER = "Message_filter"
+    VectorSearch = "Vector_Search"
     MESSAGESUMMARY = "Message_summary"
     ISSUETRACK = "Issue_Track"
     INJECTION_GUARD = "injection_guard"
+    HUMAN_REVIEW = "human_review"
+    QUERY_Rewrite = "query_clarifier"
 
     
 

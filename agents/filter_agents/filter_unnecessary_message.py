@@ -2,9 +2,10 @@ import json
 import os
 from typing import List, Any
 from langchain.messages import ToolMessage, HumanMessage
-
-
 from langchain_core.prompts import ChatPromptTemplate
+from rich.prompt import PromptType
+
+from track_issue_system import prompt_hub
 from agentic_ai_platform import logger
 from agentic_ai_platform.data_class.tool_spec import ToolSpec
 from agentic_ai_platform.llm.llm import LLM
@@ -149,6 +150,38 @@ def create_message_filter_agent(node_llm : LLM,
                                 batch_size: int = 5,
                                 max_concurrency: int = 4):
 
+    async def _found_similar_message_in_db(tool_llm: LLM, 
+                                           tool_prompt_template: ChatPromptTemplate,
+                                           message_text: str) -> bool:
+        """
+        Check if a similar message already exists in the database using vector search.
+        This function uses the vector_as_judge tool to determine if the message is similar to any existing messages in the database.
+        
+        Args:
+            message_text (str): The message text to check for similarity.
+        """
+      
+
+        prompt = tool_prompt_template.format_messages(query=message_text)
+        
+
+        response = await tool_llm.invoke_by_single_prompt(prompt)
+
+        if hasattr(response, "tool_calls"):
+            tool_calls = getattr(response, "tool_calls", None) or []
+
+            for call in tool_calls:
+                tool = next(t.tool for t in tools if t.name == call["name"])
+                if tool:
+                    tool_result = await tool.ainvoke(call["args"])
+                    return tool_result != ""
+
+        return False
+
+                
+
+
+
     async def message_filter_agent(state):
         """
         This function filters out unnecessary messages from the tool states in the given state.
@@ -176,9 +209,18 @@ def create_message_filter_agent(node_llm : LLM,
             return state.model_copy(update={"messages": json.dumps([]),
                                             "messages_filtered":True})
 
+
+        # filtering out similar messages that the database already has, and also filtering out messages that are not relevant to the context
+        tool_name = [tool.tool for tool in tools]
+        tool_llm.bind_tools(tool_name)
+        tool_prompt_template = next(t.prompt_template for t in tools if t.name == "vector_as_judge")
+
+        messages_not_in_db = [message for message in message_texts if not await _found_similar_message_in_db(tool_llm, tool_prompt_template, message)]
+
+
         all_items = await classify_messages(node_llm,
                                         prompt_template,
-                                        message_texts,
+                                        messages_not_in_db,
                                         batch_size=batch_size,
                                         max_concurrency=max_concurrency)
 

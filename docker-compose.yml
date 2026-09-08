@@ -203,8 +203,8 @@ services:
         - OMP_NUM_THREADS=4
       volumes:
         - tei_data:/data
-      command: --model-id mixedbread-ai/mxbai-embed-large-v1 --max-client-batch-size 64
-      restart: unless-stopped 
+      command: --model-id mixedbread-ai/mxbai-embed-large-v1 --max-client-batch-size 256
+      restart: unless-stopped
 
   tei-reranker-engine:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
@@ -218,9 +218,13 @@ services:
     command: --model-id mixedbread-ai/mxbai-rerank-base-v1 --max-client-batch-size 64
     restart: unless-stopped       
 
+  # NOTE: pinned to ts2.27 (not pg17-all-oss / pg17 / pg17-all) because
+  # Timescale removed the pgai extension (ai.control) from timescaledb-ha
+  # images starting with TimescaleDB 2.28 (upstream PR removing pgai from
+  # timescaledb-docker-ha, released ~2026-06). pg17-ts2.27-all is the last
+  # tag confirmed to still ship ai.control, needed for CREATE EXTENSION ai.
   postgres:
-    #image: postgres:16
-    image: pgvector/pgvector:0.7.0-pg16
+    image: timescale/timescaledb-ha:pg17-ts2.27-all
     container_name: postgres
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
@@ -228,12 +232,16 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
       - "5433:5432"
-    volumes:    
-      - pgdata:/var/lib/postgresql/data
+    volumes:
+      # This image's entrypoint hardcodes PGDATA=/home/postgres/pgdata/data
+      # (Patroni layout) -- mounting at /var/lib/postgresql/data (the plain-
+      # Postgres default) silently persists nothing and every container
+      # recreate wipes the database. Confirmed via `docker run --rm <image> env`.
+      - pgdata:/home/postgres/pgdata/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER}"]
-      interval: 10s 
+      interval: 10s
       timeout: 10s
       retries: 5
       start_period: 10s
