@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List, Any
+from typing import Dict, List, Any
 from langchain.messages import ToolMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from rich.prompt import PromptType
@@ -14,9 +14,25 @@ from agentic_ai_platform.graph.node_trace import NodeTrace
 
 
 from track_issue_system.agents.state_utils import normalize_state, wrap_state
+from track_issue_system.tools.tool_call import ToolCall
+from track_issue_system.tools.vector_as_judge import vector_as_judge
 
 
 _MAX_SELF_CORRECTION_ATTEMPTS = 2
+
+VECTOR_Search_MAX_ATTEMPTS: Dict[str, int] = {
+    "vector_as_judge": 2,
+}
+    
+
+Init_MessageFilter_ToolSpec = [
+    ToolSpec(
+            name="vector_as_judge",
+            tool=vector_as_judge,
+            prompt_template=None,
+            max_attempts=VECTOR_Search_MAX_ATTEMPTS.get("vector_as_judge", 1)
+    )
+]
 
 
 async def _invoke_tool_with_self_correction(tool_llm: LLM,
@@ -105,6 +121,10 @@ async def classify_messages(node_llm,
         batch_size sent concurrently via .batch(). Returned items keep their original
         (global) index into message_texts.
         """
+
+        if len(message_texts) == 0:
+            logger.info("[classify_messages] => No messages to classify")
+            return []
         
         pre_filtered_messages = filter_out_invalid_messages(set(message_texts))
         #chunks = [pre_filtered_messages[i:i + batch_size] for i in range(0, len(pre_filtered_messages), batch_size)]
@@ -150,9 +170,7 @@ def create_message_filter_agent(node_llm : LLM,
                                 batch_size: int = 5,
                                 max_concurrency: int = 4):
 
-    async def _found_similar_message_in_db(tool_llm: LLM, 
-                                           tool_prompt_template: ChatPromptTemplate,
-                                           message_text: str) -> bool:
+    async def _found_similar_message_in_db(message_text: List[str]) -> bool:
         """
         Check if a similar message already exists in the database using vector search.
         This function uses the vector_as_judge tool to determine if the message is similar to any existing messages in the database.
@@ -160,23 +178,36 @@ def create_message_filter_agent(node_llm : LLM,
         Args:
             message_text (str): The message text to check for similarity.
         """
-      
 
-        prompt = tool_prompt_template.format_messages(query=message_text)
+        if not message_text:
+            return True  # Consider empty messages as already existing
+
+        # pre-filter out messages that are empty or contain only whitespace
+        _message_text = [msg for msg in message_text if msg.strip()]
+
+        result = await ToolCall(tool=vector_as_judge, args={"queries": _message_text}).ainvoke()
+
+        # prompt = tool_prompt_template.format_messages(query=message_text)
         
 
-        response = await tool_llm.invoke_by_single_prompt(prompt)
+        # response = await tool_llm.invoke_by_single_prompt(prompt)
 
-        if hasattr(response, "tool_calls"):
-            tool_calls = getattr(response, "tool_calls", None) or []
+        # if hasattr(response, "tool_calls"):
+        #     tool_calls = getattr(response, "tool_calls", None) or []
 
-            for call in tool_calls:
-                tool = next(t.tool for t in tools if t.name == call["name"])
-                if tool:
-                    tool_result = await tool.ainvoke(call["args"])
-                    return tool_result != ""
+        #     for call in tool_calls:
+        #         tool = next(t.tool for t in tools if t.name == call["name"])
+        #         if tool:
+        #             try:
+        #                 ToolCallInstance = ToolCall(tool=tool, args=call["args"])
+        #                 tool_result = await ToolCallInstance.ainvoke()
+        #                 return tool_result != ""   
+        #             except Exception as e: 
+        #                 raise f"Error occurred while invoking tool '{tool.name}': {e}"
+        #             #tool_result = await tool.ainvoke(call["args"])
+        #             #return tool_result != ""
 
-        return False
+        return [message for message in result if not message if not message.strip()]  # Return True if any message is not empty, indicating it exists in the database
 
                 
 
@@ -211,11 +242,12 @@ def create_message_filter_agent(node_llm : LLM,
 
 
         # filtering out similar messages that the database already has, and also filtering out messages that are not relevant to the context
-        tool_name = [tool.tool for tool in tools]
-        tool_llm.bind_tools(tool_name)
-        tool_prompt_template = next(t.prompt_template for t in tools if t.name == "vector_as_judge")
+        # tool_name = [tool.tool for tool in tools]
+        # tool_llm.bind_tools(tool_name)
+        # tool_prompt_template = next(t.prompt_template for t in tools if t.name == "vector_as_judge")
 
-        messages_not_in_db = [message for message in message_texts if not await _found_similar_message_in_db(tool_llm, tool_prompt_template, message)]
+        #messages_not_in_db = [message for message in message_texts if not await _found_similar_message_in_db(message)]
+        messages_not_in_db = await _found_similar_message_in_db(message_texts)
 
 
         all_items = await classify_messages(node_llm,
