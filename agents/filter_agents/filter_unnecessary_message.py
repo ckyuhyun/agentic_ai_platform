@@ -177,6 +177,9 @@ def create_message_filter_agent(node_llm : LLM,
         
         Args:
             message_text (str): The message text to check for similarity.
+
+        return:
+            (message being in DB, messae not being in DB)
         """
 
         if not message_text:
@@ -187,29 +190,20 @@ def create_message_filter_agent(node_llm : LLM,
 
         result = await ToolCall(tool=vector_as_judge, args={"queries": _message_text}).ainvoke()
 
-        # prompt = tool_prompt_template.format_messages(query=message_text)
-        
+        #return [message for message in result if not message if not message.strip()]  # Return True if any message is not empty, indicating it exists in the database
+        return ([m for r, m  in zip(result, message_text) if r], [m for r, m  in zip(result, message_text) if not r])
 
-        # response = await tool_llm.invoke_by_single_prompt(prompt)
 
-        # if hasattr(response, "tool_calls"):
-        #     tool_calls = getattr(response, "tool_calls", None) or []
+    def pre_filtering(message:List[str], 
+                      min_str_len_threshold = 10):
+        """
+        this is filtering of not lengthy string which should be not for mention for any issue
+        """
 
-        #     for call in tool_calls:
-        #         tool = next(t.tool for t in tools if t.name == call["name"])
-        #         if tool:
-        #             try:
-        #                 ToolCallInstance = ToolCall(tool=tool, args=call["args"])
-        #                 tool_result = await ToolCallInstance.ainvoke()
-        #                 return tool_result != ""   
-        #             except Exception as e: 
-        #                 raise f"Error occurred while invoking tool '{tool.name}': {e}"
-        #             #tool_result = await tool.ainvoke(call["args"])
-        #             #return tool_result != ""
+        return [m for m in message if len(m.strip()) > min_str_len_threshold]
 
-        return [message for message in result if not message if not message.strip()]  # Return True if any message is not empty, indicating it exists in the database
 
-                
+
 
 
 
@@ -232,8 +226,11 @@ def create_message_filter_agent(node_llm : LLM,
         if isinstance(messages, ToolMessage):
             messages = messages.content
 
-        
-        message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
+
+        # first pre filtering only with length of string for each message
+
+        _message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
+        message_texts = pre_filtering(_message_texts)
 
         if not message_texts:
             logger.info("[message_filter_agent] => No meessages passed")
@@ -247,7 +244,7 @@ def create_message_filter_agent(node_llm : LLM,
         # tool_prompt_template = next(t.prompt_template for t in tools if t.name == "vector_as_judge")
 
         #messages_not_in_db = [message for message in message_texts if not await _found_similar_message_in_db(message)]
-        messages_not_in_db = await _found_similar_message_in_db(message_texts)
+        messages_in_db, messages_not_in_db = await _found_similar_message_in_db(message_texts)
 
 
         all_items = await classify_messages(node_llm,

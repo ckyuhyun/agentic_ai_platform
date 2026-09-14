@@ -67,7 +67,8 @@ _llm_call_retry = retry(
 
 class LLM:
     def __init__(self,
-                 model_name: str):
+                 model_name: str, 
+                 temperature:float = 0.7):
         self.model_name = model_name
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
         # Default routes through the model-gateway's /base/ prefix (see
@@ -85,9 +86,27 @@ class LLM:
         # left for the prompt and every request fails.
         self.TOKEN_LIMIT = self._resolve_token_limit()
         self.MAX_OUTPUT_TOKENS = max(256, self.TOKEN_LIMIT // 4)
+        self._temperature = temperature
         self._llm_model_ = self._llm_model_init_()
         self.llm_instance = self._llm_model_
         self.Batch_size = 30
+
+    @property
+    def temperature(self):
+        return self._temperature
+
+    @temperature.setter
+    def temperature(self, value):
+        if not isinstance(value, float):
+            raise "temperature should be float type"
+
+        if value > 1.0 or value <0.0:
+            raise "A range of temperature is 0.0 ~ 1.0"
+        
+        self._temperature = value
+        # reinitialize with temperature set update
+        self._llm_model_ = self._llm_model_init_()
+
 
     def _resolve_token_limit(self, default: int = 2048) -> int:
         """
@@ -101,7 +120,7 @@ class LLM:
             return default
 
         llm_model = os.getenv("LLM_Model")
-        try:
+        try:    
             resp = httpx.get(f"{self.VLLM_BASE_URL}/models", timeout=5)
             resp.raise_for_status()
             for entry in resp.json().get("data", []):
@@ -113,6 +132,7 @@ class LLM:
                 self.VLLM_BASE_URL, default, e,
             )
         return default
+
 
     def bind_tools(self,
                    tools: list,
@@ -264,7 +284,7 @@ class LLM:
                 base_url=self.VLLM_BASE_URL,
                 api_key="EMPTY",
                 max_tokens=self.MAX_OUTPUT_TOKENS, # Must leave room for the prompt within TOKEN_LIMIT -- never set this to the full context size
-                temperature=0.7,
+                temperature=self.temperature,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS, # Wait up for a response
                 max_retries=DEFAULT_LLM_MAX_RETRIES, # Retry up on failure
             )
@@ -275,7 +295,7 @@ class LLM:
                 model="llama3.1:latest",
                 base_url=self.OLLAMA_BASE_URL,
                 num_ctx=8192,
-                temperature=0.7,
+                temperature=self.temperature,
                 # ChatOllama has no native max_retries; timeout is forwarded to
                 # the underlying httpx client via client_kwargs.
                 client_kwargs={"timeout": DEFAULT_LLM_TIMEOUT_SECONDS},
@@ -289,7 +309,7 @@ class LLM:
         else:
             model = init_chat_model(
                 model=self.model_name,
-                temperature=0.7,
+                temperature=self.temperature,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,# Wait up for a response
                 max_retries=DEFAULT_LLM_MAX_RETRIES,# Retry up on failure
             )
