@@ -6,14 +6,14 @@ from typing import Type
 
 from agentic_ai_platform.states.queryState import QueryState
 from agentic_ai_platform.llm.llm import LLM
+from agentic_ai_platform.states.query_rewritting_state import QueryRewritting
 from agentic_ai_platform.states.supervise_state import SuperviseState
 from agentic_ai_platform.utils.message_utils import extract_new_messages
 
 
 
 
-def create_rewrite_agent(schema: Type[BaseModel],
-                         llm: LLM,
+def create_rewrite_agent(llm: LLM,
                          system_prompt: str):
 
 
@@ -54,7 +54,7 @@ def create_rewrite_agent(schema: Type[BaseModel],
         rewritten_query = await llm.ainvoke(prompt)
         #rewritten_query = re.search(r'"([^"]*)"',rewritten_query.content).group(1) # extract the rewritten query from the LLM response, assuming it's enclosed in quotes
 
-        state.query_state.rewritten_question = rewritten_query.content
+        #state.query_state.rewriteQueryState = QueryRewritting()
         #state.plan.input = rewritten_query
         return state.model_copy(update={"query_state": state.query_state,
          #                               "plan": state.plan,

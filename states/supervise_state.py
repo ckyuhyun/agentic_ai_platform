@@ -46,6 +46,11 @@ class AbstractSuperviseState(BaseModel):
     thread_id : Annotated[str, Field(
          default=None, description="Thread Id of this graph runthread id")]
 
+    human_review_reason : Annotated[str, Field(default=None, description="Explain why human review in the loop is called")]
+
+    query_state : Annotated[QueryState, Field(
+            default_factory=QueryState, description="State related to query rewriting and generation")]
+
     # state_id: Optional[str] = Field(
     #     default=None, description="Id of this graph run (== LangGraph/scheduler thread id)")
 
@@ -53,7 +58,7 @@ class AbstractSuperviseState(BaseModel):
     #     default=None, description="Business-level grouping id (defaults to state_id; distinct when multiple runs belong to one session)")
 
 
-    iteration: Annotated[int, Field(
+    iteration: Annotated[int, Field( 
         default=0, description="Number of draft/critique cycles completed")]
 
     # LangGraph message history
@@ -72,11 +77,6 @@ class AbstractSuperviseState(BaseModel):
 
 class SuperviseState(AbstractSuperviseState):
     """State shared between the drafter and critic nodes."""
-
-    
-    
-    query_state : Annotated[QueryState, Field(
-        default_factory=QueryState, description="State related to query rewriting and generation")]
 
     # Drafter output
     draft: Annotated[Optional[Union[str,list]], Field(
