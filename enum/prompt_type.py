@@ -4,6 +4,7 @@ class PromptType(str, Enum):
     REWRITE = "rewrite"
     REWRITE_EVAL = "rewrite_eval"
     EXECUTE_TOOLS = "execute_tools"
+    HUMAN_REVIEW_FEEDBACK = "human_review_feedback"
     CRITIC = "critic"
     DRAFTER = "drafter"
     PLANNER = "planner"
@@ -14,7 +15,7 @@ class PromptType(str, Enum):
     MESSAGESUMMARY = "Message_summary"
     ISSUETRACK = "Issue_Track"
     INJECTION_GUARD = "injection_guard"
-    HUMAN_REVIEW = "human_review"
+    #HUMAN_REVIEW = "human_review"
     QUERY_Rewrite = "query_clarifier"
 
     

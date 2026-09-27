@@ -131,12 +131,15 @@ class PromptRegistry:
         else:
             self.getprompt_func = self.__get_prompt_by_type_version_tags__
 
-        return self.getprompt_func(prompt_type, 
-                                   version_id,
-                                   tag)
+        try:
+            return self.getprompt_func(prompt_type, 
+                                    version_id,
+                                    tag)
+        except Exception as e: 
+            logger.error(f"Error on get_prompt : {e}")
 
 
-    def __register_to_langsmith__(self,
+    def __register_to_langsmith__(self, 
                               prompt_type: PromptType,
                               version_id: str,
                             prompt: str,

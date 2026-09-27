@@ -22,7 +22,7 @@ from agentic_ai_platform import logger
 
 
 # Request-level resilience defaults, overridable via env without a code change.
-DEFAULT_LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "5"))
+DEFAULT_LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "30"))
 DEFAULT_LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
 # Retries at the call-site (whole invoke(), not just the SDK's own transport
 # retry) so backends with no native retry support (e.g. ChatOllama) still get
@@ -67,6 +67,10 @@ class LLM:
         # /finetuned/v1 URL (e.g. evaluate_candidate.py's --candidate-url) to
         # evaluate the fine-tuned candidate instead.
         self.VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:11434/base/v1")
+        # Local vLLM runs unauthenticated ("EMPTY"); a remote GPU host (e.g. a
+        # RunPod pod behind its public proxy) should be started with --api-key.
+        self.VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
+        self._vllm_headers = {"Authorization": f"Bearer {self.VLLM_API_KEY}"}
         # max_tokens (the completion budget) and the prompt share the same
         # context window, so both must be derived from the model's real
         # max_model_len -- a hardcoded guess here silently drifts out of sync
@@ -194,7 +198,7 @@ class LLM:
 
     def _fetch_vllm_max_model_len(self, llm_model: str, default: int) -> int:
         try:
-            resp = httpx.get(f"{self.VLLM_BASE_URL}/models", timeout=5)
+            resp = httpx.get(f"{self.VLLM_BASE_URL}/models", headers=self._vllm_headers, timeout=5)
             resp.raise_for_status()
             for entry in resp.json().get("data", []):
                 if entry.get("id") == llm_model and entry.get("max_model_len"):
@@ -300,7 +304,11 @@ class LLM:
         result = await self.llm_instance.abatch(prompts, config={"max_concurrency": 4})
         return result
 
-    
+    async def invoke_with_prompt_template(self, 
+                                          prompt:ChatPromptTemplate):
+        return await self._llm_invoke(
+            lambda : self.llm_instance.ainvoke(prompt))
+        
     async def invoke_with_structured_llm(self, 
                                          scehema:Any,
                                          prompt:ChatPromptTemplate):
@@ -369,6 +377,7 @@ class LLM:
                 resp = await client.post(
                     f"{self.VLLM_BASE_URL.removesuffix('/v1')}/tokenize",
                     json={"model": llm_model, "prompt": prompt_text},
+                    headers=self._vllm_headers,
                     timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
                     )
                 resp.raise_for_status()
@@ -385,7 +394,7 @@ class LLM:
         return ChatOpenAI(
             model=llm_model,
             base_url=self.VLLM_BASE_URL,
-            api_key="EMPTY",
+            api_key=self.VLLM_API_KEY,
             max_tokens=self.MAX_OUTPUT_TOKENS, # Must leave room for the prompt within TOKEN_LIMIT -- never set this to the full context size
             temperature=self.temperature,
             timeout=DEFAULT_LLM_TIMEOUT_SECONDS, # Wait up for a response

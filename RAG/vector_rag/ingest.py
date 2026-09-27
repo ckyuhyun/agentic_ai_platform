@@ -11,8 +11,9 @@ from langchain_community.document_loaders import (
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
-from agentic_ai_platform.docker_services.rag_service.weaviate_property_data import WeaviateProperty
-from agentic_ai_platform.docker_services.rag_service.weaviate_controller import WeaviateController
+
+from docker_services.rag_service.weaviate_property_data import WeaviateProperty
+from docker_services.rag_service.weaviate_controller import WeaviateController
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
 from agentic_ai_platform.RAG.embedding import Embeddings
 from agentic_ai_platform.RAG.embedded_model_list import EmbeddingModel
