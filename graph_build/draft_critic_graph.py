@@ -70,11 +70,11 @@ def build_drafter_critic_graph():
                                                version_id="0").as_system_messages()
     plan_agent = create_planner_agent(schema=PlanState,
                                       system_prompt=plan_system_prompt,
-                                      graph_llm=LLM("llama3.1").llm_instance)
+                                      graph_llm=LLM("llama3.1")._llm_model_instance)
 
     drafter_agent = create_drafter_agent(SuperviseState,
-                                        tool_llm=LLM("llama3.1").llm_instance,
-                                         graph_llm=LLM("llama3.1").llm_instance,
+                                        tool_llm=LLM("llama3.1")._llm_model_instance,
+                                         graph_llm=LLM("llama3.1")._llm_model_instance,
                                          tools=[Tools.search_rag]
                                          #tools=[Tools.search_rag, Tools.search_web])
     

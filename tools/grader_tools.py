@@ -36,7 +36,7 @@ class EvalsTools:
         Check the draft for potential hallucinations, which are pieces of information that may be fabricated, inaccurate, or not supported by evidence.
         """
         hallucination_system_prompt_version_id = '0'
-        hallucination_llm = LLM("llama3.1").llm_instance
+        hallucination_llm = LLM("llama3.1")._llm_model_instance
 
         hallucination_tool = HallucinationsJudge(
             schema=HallucinationSignal,

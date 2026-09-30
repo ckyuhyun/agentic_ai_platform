@@ -59,7 +59,9 @@ services:
       --quantization awq
       --dtype bfloat16
       --max-model-len 4096
+      --max-num-seqs 4
       --gpu-memory-utilization 0.8
+      --cpu-offload-gb 1.5
       --enforce-eager
       --enable-auto-tool-choice
       --tool-call-parser llama3_json
@@ -79,7 +81,9 @@ services:
       --served-model-name meta-llama/Llama-3.2-3B-Instruct
       --quantization awq
       --max-model-len 4096
+      --max-num-seqs 4
       --gpu-memory-utilization 0.8
+      --cpu-offload-gb 1.5
       --enforce-eager
       --enable-auto-tool-choice
       --tool-call-parser llama3_json

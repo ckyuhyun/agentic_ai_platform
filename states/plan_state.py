@@ -1,7 +1,13 @@
 
-from typing import Annotated, List, Dict, Any, Optional
+from typing import Annotated, List, Dict, Any, Optional, Literal
 from pydantic import BaseModel, Field
 
+class PastStepResult(BaseModel):
+    agent: Annotated[str, Field(description="called agent name")]
+    status: Annotated[Literal["ok", "empty","failed","skipped"], Field(description="Result from the agent")]
+    summary: Annotated[str, Field(description="Summary what the agent does")]
+    produced: Annotated[List[str], Field(description="")]
+    metrics: Annotated[dict, Field(description="")]
 
 
 class PlanState(BaseModel):
@@ -9,7 +15,7 @@ class PlanState(BaseModel):
     plan: Annotated[List[Dict[str, Any]], Field(default_factory=list, description="Current list of steps")]
     non_plan_steps: Annotated[List[Dict[str, Any]], Field(default_factory=list, description="Steps that were considered but not included in the plan, with reasoning for why each was rejected")]
     #reasoning: str = Field(description="")
-    past_steps: Annotated[List[str], Field(default_factory=list, description="Results from completed tasks")]
+    past_steps: Annotated[List[PastStepResult], Field(default_factory=list, description="Results from completed tasks")]
 
     next_step_override: Annotated[Optional[Dict[str, Any]], Field(
         default=None,

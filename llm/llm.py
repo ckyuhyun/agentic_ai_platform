@@ -3,6 +3,7 @@ import logging
 import httpx
 import asyncio
 from typing import Awaitable, Callable, List, Any
+from openai import InternalServerError
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -15,14 +16,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_google_genai.chat_models import GoogleAPIError, GoogleRateLimitError, GoogleAPIError
+from langchain_google_genai.chat_models import GoogleAPIError, GoogleRateLimitError
 from langchain.chat_models import init_chat_model
 
 from agentic_ai_platform import logger
 
 
 # Request-level resilience defaults, overridable via env without a code change.
-DEFAULT_LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "30"))
+DEFAULT_LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "120")) #previous was 30
 DEFAULT_LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
 # Retries at the call-site (whole invoke(), not just the SDK's own transport
 # retry) so backends with no native retry support (e.g. ChatOllama) still get
@@ -67,6 +68,7 @@ class LLM:
         # /finetuned/v1 URL (e.g. evaluate_candidate.py's --candidate-url) to
         # evaluate the fine-tuned candidate instead.
         self.VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:11434/base/v1")
+        self.LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434/base/v1")
         # Local vLLM runs unauthenticated ("EMPTY"); a remote GPU host (e.g. a
         # RunPod pod behind its public proxy) should be started with --api-key.
         self.VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
@@ -82,8 +84,8 @@ class LLM:
         self.TOKEN_LIMIT = self._resolve_token_limit()
         self.MAX_OUTPUT_TOKENS = max(256, self.TOKEN_LIMIT // 4)
         self._temperature = temperature
-        self._llm_model_ = self._llm_model_init_()
-        self.llm_instance = self._llm_model_
+        
+        self._llm_model_instance = self._llm_model_init_()
         self.Batch_size = 30
         self.fallback_model = os.getenv("VLLM_Model")
 
@@ -106,7 +108,7 @@ class LLM:
 
         return type(exc).__name__ in _TRANSIENT_LLM_EXCEPTION_NAMES
 
-    def _switch_to_vllm_fallback(self) -> bool:
+    async def _switch_to_vllm_fallback(self) -> bool:
         """
         Replace self._llm_model_ with the vLLM model named by VLLM_Model.
         Returns False (leaving the current model untouched) when there is
@@ -121,7 +123,8 @@ class LLM:
             # window, not the hosted model's default.
             self.TOKEN_LIMIT = self._fetch_vllm_max_model_len(fallback_model, self.TOKEN_LIMIT)
             self.MAX_OUTPUT_TOKENS = max(256, self.TOKEN_LIMIT // 4)
-            self._llm_model_ = self._build_vllm_model(fallback_model)
+            self._llm_mode = self._build_vllm_model(fallback_model)            
+            
         except Exception as e:
             logger.warning("LLM: failed to switch %s to vLLM fallback %s: %s",
                            self.model_name, fallback_model, e)
@@ -131,19 +134,22 @@ class LLM:
         self._refresh_llm_instance()
         logger.warning("LLM: %s unavailable, switched to vLLM fallback %s",
                        self.model_name, fallback_model)
+
+        await asyncio.sleep(1)
         return True
 
     def _refresh_llm_instance(self):
         """Point llm_instance at _llm_model_, re-applying any bound tools."""
+
+        self._llm_model_instance =  self._llm_model_init_()
         if self._bound_tools is None:
-            self.llm_instance = self._llm_model_
             return
 
         tools, tool_required = self._bound_tools
         if tool_required:
-            self.llm_instance = self._llm_model_.bind_tools(tools, tool_choice="required")
+            self._llm_model_instance = self._llm_model_.bind_tools(tools, tool_choice="required")
         else:
-            self.llm_instance = self._llm_model_.bind_tools(tools)
+            self._llm_model_instance = self._llm_model_.bind_tools(tools)
 
     _llm_call_retry = retry(
         reraise=True,
@@ -167,7 +173,7 @@ class LLM:
         
         self._temperature = value
         # reinitialize with temperature set update
-        self._llm_model_ = self._llm_model_init_()
+        self._llm_model_instance = self._llm_model_init_()
 
 
     def _is_vllm_model(self) -> bool:
@@ -177,7 +183,7 @@ class LLM:
         never be routed to the vLLM gateway -- it answers 404 "model does not
         exist" for anything it isn't serving.
         """
-        llm_model_key = os.getenv("LLM_Model_Key") or ""
+        llm_model_key = os.getenv("VLLM_Model_Key") or ""
         if self.model_name.startswith(("gemini", "gpt")):
             return False
         return self.model_name in llm_model_key
@@ -193,12 +199,12 @@ class LLM:
         if not self._is_vllm_model():
             return default
 
-        return self._fetch_vllm_max_model_len(os.getenv("LLM_Model"), default)
+        return self._fetch_vllm_max_model_len(self._get_llm_model_name(), default)
 
 
     def _fetch_vllm_max_model_len(self, llm_model: str, default: int) -> int:
         try:
-            resp = httpx.get(f"{self.VLLM_BASE_URL}/models", headers=self._vllm_headers, timeout=5)
+            resp = httpx.get(f"{self._get_current_llm_url()}/models", headers=self._vllm_headers, timeout=5)
             resp.raise_for_status()
             for entry in resp.json().get("data", []):
                 if entry.get("id") == llm_model and entry.get("max_model_len"):
@@ -206,7 +212,7 @@ class LLM:
         except Exception as e:
             logger.warning(
                 "LLM: failed to resolve max_model_len from %s; falling back to %d: %s",
-                self.VLLM_BASE_URL, default, e,
+                self._get_current_llm_url(), default, e,
             )
         return default
 
@@ -235,9 +241,6 @@ class LLM:
         """
         system_prompt, human_prompt = self._decode_human_system_prompt(system_human_message)
         prompt_token_count =  await self.get_prompt_token_count(system_human_message)
-        
-
-        
 
         # Reserve room for the completion: TOKEN_LIMIT is the total context
         # window (prompt + output combined), so route to batching once the
@@ -261,26 +264,43 @@ class LLM:
                        config : dict = None) -> str:
         # A lambda, not the ainvoke() coroutine itself: llm_instance is swapped
         # on fallback, so the retry has to re-read it and build a fresh call.
-        return await self._llm_invoke(lambda: self.llm_instance.ainvoke(system_human_message,
+        return await self._llm_invoke(lambda: self._llm_model_instance.ainvoke(system_human_message,
                                                                         config=config))
 
     async def _llm_invoke(self,
                           invoke_func : Callable[[], Awaitable[Any]]):
         """
         Await invoke_func(); if a Google API / rate-limit error occurs, switch
-        to the vLLM fallback model and call invoke_func() once more.
+        to the vLLM fallback model and call invoke_func() again.
 
         invoke_func must be a zero-arg factory returning a new awaitable each
         call -- a coroutine object can only be awaited once and can't be called.
         """
         try:
-            return await invoke_func()
-        except (GoogleAPIError, GoogleRateLimitError): 
-            # GoogleAPIError : 500/503 - Google server errors / model temporarily overloaded.
-            # GoogleRateLimitError : 429 - Quota exceeded or rate limits hit.
-            if not self._switch_to_vllm_fallback():
-                raise
-            return await invoke_func()
+            return await self._invoke_with_gateway_backoff(invoke_func)
+        except Exception as e:            
+            await self._switch_to_vllm_fallback()
+            return await self._invoke_with_gateway_backoff(invoke_func)
+
+    async def _invoke_with_gateway_backoff(self,
+                                           invoke_func : Callable[[], Awaitable[Any]]):
+        """
+        Retry invoke_func() on 5xx from an OpenAI-compatible backend -- e.g. a
+        502 from the model-gateway while vLLM is cold-starting. The OpenAI
+        client raises these as openai.InternalServerError, not google's
+        BadGateway.
+        """
+        for attempt in range(1, DEFAULT_LLM_CALL_MAX_ATTEMPTS + 1):
+            try:
+                return await invoke_func()
+            except InternalServerError as e:
+                if attempt == DEFAULT_LLM_CALL_MAX_ATTEMPTS:
+                    raise
+                delay = min(20, 2 ** attempt)
+                logger.warning("LLM: %s returned %s (attempt %d/%d), retrying in %ds",
+                               self.model_name, e.status_code, attempt,
+                               DEFAULT_LLM_CALL_MAX_ATTEMPTS, delay)
+                await asyncio.sleep(delay)
         
 
 
@@ -296,30 +316,40 @@ class LLM:
         for idx, c in enumerate(chunks):
             prompt = ChatPromptTemplate.from_messages([("system", system_message),
                                                        ("human",c)])
-
-            
             prompts.append(prompt.format_messages())
-
         
-        result = await self.llm_instance.abatch(prompts, config={"max_concurrency": 4})
+        result = await self._llm_model_instance.abatch(prompts, config={"max_concurrency": 4})
         return result
 
     async def invoke_with_prompt_template(self, 
                                           prompt:ChatPromptTemplate):
         return await self._llm_invoke(
-            lambda : self.llm_instance.ainvoke(prompt))
+            lambda : self._llm_model_instance.ainvoke(prompt))
         
     async def invoke_with_structured_llm(self, 
                                          scehema:Any,
                                          prompt:ChatPromptTemplate):
         # Built inside the lambda so a fallback swap re-wraps the new llm_instance.
-        return await self._llm_invoke(
-            lambda: self.llm_instance.with_structured_output(schema=scehema).ainvoke(prompt))
+        system_prompt, human_prompt = self._decode_human_system_prompt_from_chatTemplate(prompt)
+        prompt_token = await self.get_prompt_token_count(system_prompt) + await self.get_prompt_token_count(human_prompt)
+
+        logger.info(f"Used Token : {prompt_token}")
+
+        response = await self._llm_invoke(
+            lambda: self._llm_model_instance.with_structured_output(schema=scehema).ainvoke(prompt))
+
+        return response
         
 
             
         
-        
+    def _decode_human_system_prompt_from_chatTemplate(self,
+                                                      prompt:ChatPromptTemplate) -> tuple[str,str]:
+        system_prompt = next((msg.content for msg in prompt if msg.type =="system"), None)
+        human_prompt = next((msg.content for msg in prompt if msg.type =="human"), None)
+
+        return system_prompt, human_prompt
+
 
     def _decode_human_system_prompt(self,
                           system_human_message:List[Any]) -> tuple[str, str]:
@@ -333,8 +363,6 @@ class LLM:
         
         return system_prompt, human_prompt
 
-
-  
         
         
 
@@ -353,9 +381,34 @@ class LLM:
         if human_message:
             message.append(HumanMessage(content=human_message))
 
-        response = await self.llm_instance.ainvoke(message,
+        response = await self._llm_model_instance.ainvoke(message,
                                            config=config)
         return response
+
+    async def _tokenize(self, 
+                        prompt_text:str):
+
+        _llm_url = self._get_current_llm_url()
+        _llm_model = self._get_llm_model_name()
+        async with httpx.AsyncClient() as client:
+                        try:
+                            resp = await client.post(
+                                url=f"{_llm_url.removesuffix('/v1')}/tokenize",
+                                json={"model": _llm_model, "prompt": prompt_text},
+                                headers=self._vllm_headers,
+                                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
+                                )
+                            resp.raise_for_status()
+        
+                        except (httpx.HTTPError, httpx.ConnectError):
+                            raise "connection issue"                            
+        return resp
+
+    def _get_llm_model_name(self):
+        if self._using_vllm_fallback:
+            return os.getenv("VLLM_Model")
+        else:
+            return os.getenv("LLM_Model")
 
     async def get_prompt_token_count(self,
                       prompts: List[Any]) -> int:
@@ -365,35 +418,61 @@ class LLM:
         Uses the ~4-characters-per-token rule of thumb (OpenAI's own guidance
         for English text) instead of a model-specific tokenizer.
         """
-        llm_model = os.getenv("LLM_Model")
+        
         token_count = 0
         for prompt in prompts:
-            prompt_text = prompt.content
+            prompt_text = prompt.content if hasattr(prompt, 'content') else prompt
             if not self._is_vllm_model():
                 # No vLLM /tokenize endpoint for hosted providers
                 token_count += max(1, len(prompt_text) // 4)
                 continue
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{self.VLLM_BASE_URL.removesuffix('/v1')}/tokenize",
-                    json={"model": llm_model, "prompt": prompt_text},
-                    headers=self._vllm_headers,
-                    timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
-                    )
-                resp.raise_for_status()
 
-                if resp.status_code == 200:
-                    token_count+= resp.json()["count"]
-                else:
-                    # if not getting the token count from the VLLM tokenizer well
-                    token_count+= max(1, len(prompt_text) // 4)   
+            try:
+                resp = await self._tokenize(prompt_text=prompt_text)
+            except Exception as e:
+                await self._switch_to_vllm_fallback()
+                resp = await self._tokenize(prompt_text=prompt_text)
+
+            # async with httpx.AsyncClient() as client:
+            #     try:
+            #         resp = await client.post(
+            #             url=f"{self._get_current_llm_url().removesuffix('/v1')}/tokenize",
+            #             json={"model": llm_model, "prompt": prompt_text},
+            #             headers=self._vllm_headers,
+            #             timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
+            #             )
+            #         resp.raise_for_status()
+
+            #     except (httpx.HTTPError, httpx.ConnectError):
+            #         self._switch_to_vllm_fallback()
+            #         resp = await client.post(
+            #                                 url=f"{self._get_current_llm_url().removesuffix('/v1')}/tokenize",
+            #                                 json={"model": llm_model, "prompt": prompt_text},
+            #                                 headers=self._vllm_headers,
+            #                                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
+            #                                 )
+
+
+                token_count+= resp.json()["count"]
+                # if resp.status_code == 200:
+                #     token_count+= resp.json()["count"]
+                # else:
+                #     # if not getting the token count from the VLLM tokenizer well
+                #     token_count+= max(1, len(prompt_text) // 4)   
 
         return token_count
+
+    def _get_current_llm_url(self):
+        if self._using_vllm_fallback:
+            return self.VLLM_BASE_URL
+        else:
+            return self.LLM_BASE_URL
+
     
     def _build_vllm_model(self, llm_model: str) -> ChatOpenAI:
         return ChatOpenAI(
             model=llm_model,
-            base_url=self.VLLM_BASE_URL,
+            base_url=self._get_current_llm_url(),
             api_key=self.VLLM_API_KEY,
             max_tokens=self.MAX_OUTPUT_TOKENS, # Must leave room for the prompt within TOKEN_LIMIT -- never set this to the full context size
             temperature=self.temperature,
@@ -404,18 +483,17 @@ class LLM:
     def _llm_model_init_(self):
         _local_docker_llm_models = {"llama3", "llama3.1", "llama3.2", "mistral", "gemma", "phi3"}
 
-        model = None
-        llm_model = os.getenv("LLM_Model")
+        _llm_model_instance = None
+        
+        llm_model = self._get_llm_model_name()
 
-        if self._using_vllm_fallback:
+        if self._using_vllm_fallback or self._is_vllm_model():
             # keep the fallback across re-inits (e.g. the temperature setter)
-            model = self._build_vllm_model(os.getenv("VLLM_Model"))
-        elif self._is_vllm_model():
-            model = self._build_vllm_model(llm_model)
+            _llm_model_instance = self._build_vllm_model(llm_model=llm_model)        
         elif self.model_name in _local_docker_llm_models or \
             ":" in self.model_name and not \
                 self.model_name.startswith("gpt"):
-            model = ChatOllama(
+            _llm_model_instance = ChatOllama(
                 model="llama3.1:latest",
                 base_url=self.OLLAMA_BASE_URL,
                 num_ctx=8192,
@@ -424,25 +502,22 @@ class LLM:
                 # the underlying httpx client via client_kwargs.
                 client_kwargs={"timeout": DEFAULT_LLM_TIMEOUT_SECONDS},
             )
-        elif self.model_name.startswith('gpt'):
-            model = ChatOpenAI(
+        elif self.model_name.startswith('gpt') | self.model_name.startswith("gemma"):
+            _llm_model_instance = ChatOpenAI(
                 model = self.model_name,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,# Wait up for a response
                 max_retries=DEFAULT_LLM_MAX_RETRIES,# Retry up on failure
             )
         elif self.model_name.startswith('gemini'):
-            model = ChatGoogleGenerativeAI(
+            _llm_model_instance = ChatGoogleGenerativeAI(
                 model = self.model_name,
                 temperature = self.temperature,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
                 max_retries=DEFAULT_LLM_MAX_RETRIES
-            )
+            )        
         else:
-            model = init_chat_model(
-                model=self.model_name,
-                temperature=self.temperature,
-                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,# Wait up for a response
-                max_retries=DEFAULT_LLM_MAX_RETRIES,# Retry up on failure
-            )
-        return model
+            logger.warning("llm model instance not being assigned")
+            raise ("llm model instance not being assigned")
+
+        return _llm_model_instance
         
