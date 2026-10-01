@@ -3,7 +3,7 @@ import logging
 import httpx
 import asyncio
 from typing import Awaitable, Callable, List, Any
-from openai import InternalServerError
+from openai import InternalServerError, LengthFinishReasonError
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -90,7 +90,7 @@ class LLM:
         self.fallback_model = os.getenv("VLLM_Model")
 
         
-    def is_retryable_llm_error(self, 
+    async def is_retryable_llm_error(self, 
                                exc: BaseException) -> bool:
         """
         Define a predicate to filter retryable vs non-retryable LLM exceptions.
@@ -102,8 +102,8 @@ class LLM:
         # exception list excluding failures
         #if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError, httpx.ReadTimeout)):
         #    return True
-        if isinstance(exc, (GoogleAPIError, GoogleRateLimitError)) \
-                and self._switch_to_vllm_fallback():
+        if isinstance(exc, (GoogleAPIError, GoogleRateLimitError)):
+            await self._switch_to_vllm_fallback()
             return True
 
         return type(exc).__name__ in _TRANSIENT_LLM_EXCEPTION_NAMES
@@ -147,9 +147,9 @@ class LLM:
 
         tools, tool_required = self._bound_tools
         if tool_required:
-            self._llm_model_instance = self._llm_model_.bind_tools(tools, tool_choice="required")
+            self._llm_model_instance = self._llm_model_instance.bind_tools(tools, tool_choice="required")
         else:
-            self._llm_model_instance = self._llm_model_.bind_tools(tools)
+            self._llm_model_instance = self._llm_model_instance.bind_tools(tools)
 
     _llm_call_retry = retry(
         reraise=True,
@@ -178,15 +178,15 @@ class LLM:
 
     def _is_vllm_model(self) -> bool:
         """
-        True only when model_name is the self-hosted vLLM model. Hosted
-        providers (gemini-*, gpt-*) can also be set as LLM_Model_Key, but must
-        never be routed to the vLLM gateway -- it answers 404 "model does not
-        exist" for anything it isn't serving.
-        """
-        llm_model_key = os.getenv("VLLM_Model_Key") or ""
-        if self.model_name.startswith(("gemini", "gpt")):
+        
+        """        
+        if self._using_vllm_fallback or self.model_name in os.getenv("VLLM_Model_Key"):
+            return True
+        else:
             return False
-        return self.model_name in llm_model_key
+        
+        # self_hosted_keys = {os.getenv("LLM_Model_Key"), os.getenv("VLLM_Model_Key")} - {None, ""}
+        # return self.model_name in self_hosted_keys
 
 
     def _resolve_token_limit(self, default: int = 2048) -> int:
@@ -293,6 +293,8 @@ class LLM:
         for attempt in range(1, DEFAULT_LLM_CALL_MAX_ATTEMPTS + 1):
             try:
                 return await invoke_func()
+            except LengthFinishReasonError as e:
+                logger.error("")
             except InternalServerError as e:
                 if attempt == DEFAULT_LLM_CALL_MAX_ATTEMPTS:
                     raise
@@ -385,23 +387,31 @@ class LLM:
                                            config=config)
         return response
 
-    async def _tokenize(self, 
-                        prompt_text:str):
+    def _get_tokenize_url(self, llm_model: str) -> str:
+        """
+        The tokenize endpoint lives at a different path depending on how the
+        model is served: gemma's server exposes it under /v1, the other
+        OpenAI-compatible vLLM servers at the root.
+        """
+        base_url = self._get_current_llm_url().rstrip('/')
+        if "gemma" in llm_model:
+            return f"{base_url}/tokenize"
+        return f"{base_url.removesuffix('/v1')}/tokenize"
 
-        _llm_url = self._get_current_llm_url()
+    async def _tokenize(self,
+                        prompt_text:str):
         _llm_model = self._get_llm_model_name()
+        _tokenizer_url = self._get_tokenize_url(_llm_model)
+
+        # Runpod could not support the /v1/tokenize so returns 404
         async with httpx.AsyncClient() as client:
-                        try:
-                            resp = await client.post(
-                                url=f"{_llm_url.removesuffix('/v1')}/tokenize",
-                                json={"model": _llm_model, "prompt": prompt_text},
-                                headers=self._vllm_headers,
-                                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
-                                )
-                            resp.raise_for_status()
-        
-                        except (httpx.HTTPError, httpx.ConnectError):
-                            raise "connection issue"                            
+            resp = await client.post(
+                url=_tokenizer_url,
+                json={"model": _llm_model, "prompt": prompt_text},
+                headers=self._vllm_headers,
+                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
+                )
+            resp.raise_for_status()
         return resp
 
     def _get_llm_model_name(self):
@@ -411,7 +421,7 @@ class LLM:
             return os.getenv("LLM_Model")
 
     async def get_prompt_token_count(self,
-                      prompts: List[Any]) -> int:
+                      prompt: str) -> int:
         """
         Estimate the number of tokens in the given text.
 
@@ -419,19 +429,21 @@ class LLM:
         for English text) instead of a model-specific tokenizer.
         """
         
-        token_count = 0
-        for prompt in prompts:
-            prompt_text = prompt.content if hasattr(prompt, 'content') else prompt
-            if not self._is_vllm_model():
-                # No vLLM /tokenize endpoint for hosted providers
-                token_count += max(1, len(prompt_text) // 4)
-                continue
-
+        token_count = 0        
+        prompt_text = prompt.content if hasattr(prompt, 'content') else prompt
+        if not self._is_vllm_model():
+            # No vLLM /tokenize endpoint for hosted providers
+            token_count = max(1, len(prompt_text) // 4)
+        else:
             try:
                 resp = await self._tokenize(prompt_text=prompt_text)
+                token_count += resp.json()["count"]
             except Exception as e:
-                await self._switch_to_vllm_fallback()
-                resp = await self._tokenize(prompt_text=prompt_text)
+                # Token counting only feeds the batch-vs-single heuristic, so an
+                # unreachable/missing /tokenize falls back to the estimate rather
+                # than switching the whole instance to another model. (i.e. it wouldn't return tokens with runpod as it is not supported)
+                logger.warning("LLM: /tokenize failed (%s); estimating token count", e)
+                token_count = max(1, len(prompt_text) // 4)
 
             # async with httpx.AsyncClient() as client:
             #     try:
@@ -453,7 +465,6 @@ class LLM:
             #                                 )
 
 
-                token_count+= resp.json()["count"]
                 # if resp.status_code == 200:
                 #     token_count+= resp.json()["count"]
                 # else:
@@ -469,9 +480,9 @@ class LLM:
             return self.LLM_BASE_URL
 
     
-    def _build_vllm_model(self, llm_model: str) -> ChatOpenAI:
+    def _build_vllm_model(self, llm_model_name: str) -> ChatOpenAI:
         return ChatOpenAI(
-            model=llm_model,
+            model=llm_model_name,
             base_url=self._get_current_llm_url(),
             api_key=self.VLLM_API_KEY,
             max_tokens=self.MAX_OUTPUT_TOKENS, # Must leave room for the prompt within TOKEN_LIMIT -- never set this to the full context size
@@ -481,18 +492,17 @@ class LLM:
         )
 
     def _llm_model_init_(self):
-        _local_docker_llm_models = {"llama3", "llama3.1", "llama3.2", "mistral", "gemma", "phi3"}
+        _local_docker_llm_models = {"llama3", "llama3.1", "llama3.2", "mistral", "phi3"}
 
         _llm_model_instance = None
         
-        llm_model = self._get_llm_model_name()
+        llm_model_name = self._get_llm_model_name()
 
         if self._using_vllm_fallback or self._is_vllm_model():
             # keep the fallback across re-inits (e.g. the temperature setter)
-            _llm_model_instance = self._build_vllm_model(llm_model=llm_model)        
+            _llm_model_instance = self._build_vllm_model(llm_model_name=llm_model_name)        
         elif self.model_name in _local_docker_llm_models or \
-            ":" in self.model_name and not \
-                self.model_name.startswith("gpt"):
+            ":" in llm_model_name and not "gpt" in llm_model_name:
             _llm_model_instance = ChatOllama(
                 model="llama3.1:latest",
                 base_url=self.OLLAMA_BASE_URL,
@@ -502,19 +512,29 @@ class LLM:
                 # the underlying httpx client via client_kwargs.
                 client_kwargs={"timeout": DEFAULT_LLM_TIMEOUT_SECONDS},
             )
-        elif self.model_name.startswith('gpt') | self.model_name.startswith("gemma"):
+        elif 'gpt' in llm_model_name:
             _llm_model_instance = ChatOpenAI(
-                model = self.model_name,
+                model = llm_model_name,
                 timeout=DEFAULT_LLM_TIMEOUT_SECONDS,# Wait up for a response
                 max_retries=DEFAULT_LLM_MAX_RETRIES,# Retry up on failure
             )
-        elif self.model_name.startswith('gemini'):
-            _llm_model_instance = ChatGoogleGenerativeAI(
-                model = self.model_name,
-                temperature = self.temperature,
-                timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
-                max_retries=DEFAULT_LLM_MAX_RETRIES
-            )        
+        elif 'gemini' in llm_model_name or 'gemma' in llm_model_name:
+            if "runpod" in os.getenv("LLM_BASE_URL", ""):
+                _llm_model_instance = ChatOpenAI(
+                                            model = "gemma", # runpod recongnizes only 'gemma'
+                                            openai_api_base = os.getenv("LLM_BASE_URL"),
+                                            timeout=DEFAULT_LLM_TIMEOUT_SECONDS,# Wait up for a response
+                                            max_retries=DEFAULT_LLM_MAX_RETRIES,# Retry up on failure
+                                        )
+            else:
+                _llm_model_instance = ChatGoogleGenerativeAI(
+                                    model = llm_model_name,
+                                    temperature = self.temperature,
+                                    timeout=DEFAULT_LLM_TIMEOUT_SECONDS,
+                                    max_retries=DEFAULT_LLM_MAX_RETRIES
+                                )
+                
+            
         else:
             logger.warning("llm model instance not being assigned")
             raise ("llm model instance not being assigned")
