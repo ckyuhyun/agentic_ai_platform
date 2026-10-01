@@ -12,6 +12,7 @@ from typing import Any, Literal, Optional, List
 
 try:
     from agentic_ai_platform.eval.langsmith.note_trace import post_trace
+    from agentic_ai_platform import logger
     from langsmith import Client as LangSmithClient
     LANGSMITH_AVAILABLE = True
 except Exception:
@@ -62,7 +63,9 @@ class GraphBuild:
                                     version="v2"):
                 self._handle_chunk(chunk)
         except ValueError as e:
-            RuntimeError(f"Error during graph execution: {str(e)}")
+            logger.error(f"ValueError during graph execution: {str(e)}")
+            raise RuntimeError(f"Error during graph execution: {str(e)}")
+            
 
         if LANGSMITH_AVAILABLE:
            await self._post_traces_to_langsmith()
