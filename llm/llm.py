@@ -267,7 +267,7 @@ class LLM:
         return await self._llm_invoke(lambda: self._llm_model_instance.ainvoke(system_human_message,
                                                                         config=config))
 
-    async def _llm_invoke(self,
+    async def _llm_invoke(self,              
                           invoke_func : Callable[[], Awaitable[Any]]):
         """
         Await invoke_func(); if a Google API / rate-limit error occurs, switch
@@ -294,12 +294,14 @@ class LLM:
             try:
                 return await invoke_func()
             except LengthFinishReasonError as e:
-                logger.error("")
+                logger.error("LLM : %s returned LengthFinishReasonError (attempt %d/%d): %s",
+                               self.model_name, attempt,
+                               DEFAULT_LLM_CALL_MAX_ATTEMPTS, e)
             except InternalServerError as e:
                 if attempt == DEFAULT_LLM_CALL_MAX_ATTEMPTS:
                     raise
                 delay = min(20, 2 ** attempt)
-                logger.warning("LLM: %s returned %s (attempt %d/%d), retrying in %ds",
+                logger.warning("LLM : %s returned %s (attempt %d/%d), retrying in %ds",
                                self.model_name, e.status_code, attempt,
                                DEFAULT_LLM_CALL_MAX_ATTEMPTS, delay)
                 await asyncio.sleep(delay)
@@ -329,7 +331,7 @@ class LLM:
             lambda : self._llm_model_instance.ainvoke(prompt))
         
     async def invoke_with_structured_llm(self, 
-                                         scehema:Any,
+                                         schema:Any,
                                          prompt:ChatPromptTemplate):
         # Built inside the lambda so a fallback swap re-wraps the new llm_instance.
         system_prompt, human_prompt = self._decode_human_system_prompt_from_chatTemplate(prompt)
@@ -338,7 +340,7 @@ class LLM:
         logger.info(f"Used Token : {prompt_token}")
 
         response = await self._llm_invoke(
-            lambda: self._llm_model_instance.with_structured_output(schema=scehema).ainvoke(prompt))
+            lambda: self._llm_model_instance.with_structured_output(schema=schema).ainvoke(prompt))
 
         return response
         

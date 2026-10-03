@@ -38,30 +38,54 @@ class GraphBuild:
         graph: StateGraph,
         init_state: Any,
         config : RunnableConfig | None,
-        agents_interrupted_after : List | None,
+        checkpointer_timetravel_enabled : bool = False,
         stream_mode: StreamMode = "values",
         checkpointer: Any = None,
     ):
         self.config = config
-
-
+        
 
         if checkpointer is not None:
             # Caller supplied a real saver (e.g. PostgresSaverWrapper.checkpointer) -- use it.
-            self.app = graph.compile(checkpointer=checkpointer,
-                                     interrupt_after=agents_interrupted_after)
+            self.app = graph.compile(checkpointer=checkpointer)
         elif self.enabled_persistentMemory:
-            self.app = graph.compile(checkpointer=InMemorySaver(),
-                                     interrupt_after=agents_interrupted_after)
+            self.app = graph.compile(checkpointer=InMemorySaver())
         else:
-            self.app = graph.compile(interrupt_after=agents_interrupted_after)
-      
+            self.app = graph.compile()
+
+        target_timetravel = None
+        if checkpointer_timetravel_enabled:
+            logger.info("Checkpointer timetravel is enabled. Using InMemorySaver for checkpointer.")
+
+            print("Available state snapshots for timetravel:")
+            index : int = 0 
+            snaps : List[Any] = []
+            async for snap in self.app.aget_state_history(config):
+                print(f"{index}: {snap.next}")
+                snaps.append(snap)
+                index += 1
+
+            checkpointer_timetravel_target_index = input("Enter the target node for timetravel (or leave blank to skip): ").strip()
+            if checkpointer_timetravel_target_index:
+                target_timetravel = snaps[int(checkpointer_timetravel_target_index)]
+            else:
+                logger.info("No timetravel target selected. Proceeding with normal execution.")
+
         try:
-            async for chunk in self.app.astream(init_state,
-                                        config=self.config,
-                                        stream_mode=stream_mode,
-                                    version="v2"):
-                self._handle_chunk(chunk)
+            if target_timetravel is not None:
+                # Input must be None to continue from the checkpoint: any non-None
+                # input discards the checkpoint's pending tasks and re-enters from START.
+                async for chunk in self.app.astream(None,
+                                            config=target_timetravel.config,
+                                            stream_mode="updates",
+                                            version="v2"):
+                    self._handle_chunk(chunk)
+            else:
+                async for chunk in self.app.astream(init_state,
+                                            config=self.config,
+                                            stream_mode=stream_mode,
+                                        version="v2"):
+                    self._handle_chunk(chunk)
         except ValueError as e:
             logger.error(f"ValueError during graph execution: {str(e)}")
             raise RuntimeError(f"Error during graph execution: {str(e)}")
