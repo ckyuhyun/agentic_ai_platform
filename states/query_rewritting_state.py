@@ -21,5 +21,5 @@ class QueryRewritting(BaseModel):
     )]
     clarifying_question: Annotated[str, Field(
         default="",
-        description="If is_ambiguous and no reasonable default exists, the question to ask the human -- otherwise blank"
+        description="If is_ambiguous or is_relevant is true, the question to ask the human -- otherwise blank"
     )]

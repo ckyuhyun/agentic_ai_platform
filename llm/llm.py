@@ -103,6 +103,8 @@ class LLM:
         #if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError, httpx.ReadTimeout)):
         #    return True
         if isinstance(exc, (GoogleAPIError, GoogleRateLimitError)):
+            logger.error("LLM: Google API / rate-limit error %s, switching to vLLM fallback %s",
+                           type(exc).__name__, self.fallback_model)
             await self._switch_to_vllm_fallback()
             return True
 
@@ -247,7 +249,7 @@ class LLM:
         # prompt alone would leave too little space for MAX_OUTPUT_TOKENS.
         input_budget = self.TOKEN_LIMIT - self.MAX_OUTPUT_TOKENS
         if prompt_token_count >= input_budget:
-
+            logger.info(f"Prompt token count {prompt_token_count} exceeds input budget {input_budget}, using batch invoke")
             response = await self._batch_invoke(system_message=system_prompt,
                                           human_message = human_prompt,
                                          config=config)
@@ -276,11 +278,21 @@ class LLM:
         invoke_func must be a zero-arg factory returning a new awaitable each
         call -- a coroutine object can only be awaited once and can't be called.
         """
+        for attempt in range(1, DEFAULT_LLM_CALL_MAX_ATTEMPTS + 1):
+            try:
+                return await self._invoke_with_gateway_backoff(invoke_func)
+            except Exception as e:            
+                logger.warning("LLM: invoke attempt %d/%d failed: %s", attempt, DEFAULT_LLM_CALL_MAX_ATTEMPTS, e)
+                continue
+
+        # model switching as all attempts has been failed 
+        await self._switch_to_vllm_fallback()
         try:
             return await self._invoke_with_gateway_backoff(invoke_func)
-        except Exception as e:            
-            await self._switch_to_vllm_fallback()
-            return await self._invoke_with_gateway_backoff(invoke_func)
+        except Exception as e:
+            logger.error("LLM: invoke failed after fallback to vLLM %s: %s",
+                           self.fallback_model, e)
+            raise
 
     async def _invoke_with_gateway_backoff(self,
                                            invoke_func : Callable[[], Awaitable[Any]]):
@@ -290,21 +302,17 @@ class LLM:
         client raises these as openai.InternalServerError, not google's
         BadGateway.
         """
-        for attempt in range(1, DEFAULT_LLM_CALL_MAX_ATTEMPTS + 1):
-            try:
-                return await invoke_func()
-            except LengthFinishReasonError as e:
-                logger.error("LLM : %s returned LengthFinishReasonError (attempt %d/%d): %s",
-                               self.model_name, attempt,
-                               DEFAULT_LLM_CALL_MAX_ATTEMPTS, e)
-            except InternalServerError as e:
-                if attempt == DEFAULT_LLM_CALL_MAX_ATTEMPTS:
-                    raise
-                delay = min(20, 2 ** attempt)
-                logger.warning("LLM : %s returned %s (attempt %d/%d), retrying in %ds",
-                               self.model_name, e.status_code, attempt,
-                               DEFAULT_LLM_CALL_MAX_ATTEMPTS, delay)
-                await asyncio.sleep(delay)
+        
+        try:
+            return await invoke_func()
+        except LengthFinishReasonError as e:
+            logger.error("LLM : %s returned LengthFinishReasonError : %s",
+                            self.model_name, e)
+        except InternalServerError as e:
+            logger.error("LLM : %s returned InternalServerError : %s",
+                            self.model_name, e)
+        except Exception as e:
+            logger.error("LLM : %s return - %s",self.model_name, e)
         
 
 
