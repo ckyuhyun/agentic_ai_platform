@@ -1,4 +1,4 @@
-from agentic_ai_platform.RAG.embedding import Embeddings
+from agentic_ai_platform.embedding.embedding import Embeddings
 
 class InboundQuery:
     def __init__(self, 
@@ -13,7 +13,7 @@ class InboundQuery:
 
     def _embedding_processing_(self):
         emd = Embeddings()
-        self._embedding_ = emd.generate_embedding_text(self._query_)        
+        self._embedding_ = emd.generate_embeddings(self._query_)        
 
 
     

@@ -1,22 +1,18 @@
-import os
-import psycopg2
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
 
-from agentic_ai_platform.db.postgres_db import connection_params
+from agentic_ai_platform import Postgres_Engine
 
 
-class PostgresSaverWrapper:
-    def __init__(self):        
-        self.url = connection_params().get('host')
-        self.port =  connection_params().get('port')
-        self.dbname = connection_params().get('dbname')
-        self.user = connection_params().get('user')
-        self.password = connection_params().get('password')
+class PostgresCheckpointer:
+    def __init__(self):
         self._checkpointer = None
 
-        self.db_url = f"postgresql://{self.user}:{self.password}@{self.url}:{self.port}/{self.dbname}"
+        # Reuse the engine's connection settings, minus the SQLAlchemy
+        # "+psycopg" driver suffix, which psycopg/libpq doesn't understand.
+        self.db_url = Postgres_Engine.url.set(drivername="postgresql")\
+                                         .render_as_string(hide_password=False)
         self._pool = None
 
     @property

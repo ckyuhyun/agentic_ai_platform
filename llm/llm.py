@@ -308,12 +308,15 @@ class LLM:
         except LengthFinishReasonError as e:
             logger.error("LLM : %s returned LengthFinishReasonError : %s",
                             self.model_name, e)
+            raise
         except InternalServerError as e:
             logger.error("LLM : %s returned InternalServerError : %s",
                             self.model_name, e)
+            raise
         except Exception as e:
             logger.error("LLM : %s return - %s",self.model_name, e)
-        
+            raise
+
 
 
     async def _batch_invoke(self,

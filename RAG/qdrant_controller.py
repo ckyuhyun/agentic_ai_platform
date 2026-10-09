@@ -52,7 +52,7 @@ except ImportError:
     print("Warning: qdrant-client not installed. Install with: pip install qdrant-client")
 
 
-from agentic_ai_platform.RAG.embedding import (
+from agentic_ai_platform.embedding.embedding import (
     EmbeddingModel,
     EMBEDDING_DIMENSIONS,
     Embeddings,
@@ -329,7 +329,7 @@ class QdrantRAGController:
             return False
 
         # Generate embedding from query
-        embeddings : Union[List[float], List[list[float]]] = self.embedding_instance.generate_embedding_text(data)
+        embeddings : Union[List[float], List[list[float]]] = self.embedding_instance.generate_embeddings(data)
 
         # Generate unique ID from query
         point_id = self._generate_id(query)
@@ -473,7 +473,7 @@ class QdrantRAGController:
         expanded_query = self.query_expander(query) if self.query_expander else query
 
         # Generate embedding from expanded query
-        query_embedding = self.embedding_instance.generate_embedding_text(expanded_query)
+        query_embedding = self.embedding_instance.generate_embeddings(expanded_query)
 
         # Build filters
         filters = self._build_filters(must_conditions)
@@ -509,7 +509,7 @@ class QdrantRAGController:
         if not self.reranker:
             return self._search_balanced(query, must_conditions, deserializer, limit)
 
-        query_embedding = self.embedding_instance.generate_embedding_text(query)
+        query_embedding = self.embedding_instance.generate_embeddings(query)
 
         # Build filters
         filters = self._build_filters(must_conditions)
@@ -569,7 +569,7 @@ class QdrantRAGController:
         search_params: Optional[SearchParams] = None,
     ) -> Optional[Any]:
         """Execute search with given parameters"""
-        query_embedding = self.embedding_instance.generate_embedding_text(query)
+        query_embedding = self.embedding_instance.generate_embeddings(query)
  
         # Build filters
         filters = self._build_filters(must_conditions)

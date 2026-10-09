@@ -2,7 +2,7 @@
 from typing import Optional, Union, List
 from enum import Enum
 import hashlib
-from agentic_ai_platform.RAG.embedded_model_list import EmbeddingModel
+from agentic_ai_platform.embedding.embedded_model_list import EmbeddingModel
 from agentic_ai_platform.graph.embedded_model_decision import EmbeddedModelDecision
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents import Document
@@ -106,7 +106,7 @@ class Embeddings(EmbeddedModelDecision):
             
 
 
-    def generate_embedding_text(self, 
+    def generate_embeddings(self, 
                            text: str) -> Union[List[float], List[list[float]]]:
         """
         Generate embedding(s) for the given text. If the text is long, it will be split into semantic chunks and embeddings will be generated for each chunk.
