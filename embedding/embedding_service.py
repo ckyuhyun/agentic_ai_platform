@@ -1,7 +1,7 @@
 import os
 import requests
 from typing import List, Union
-
+import httpx
 
 
 class EmbeddingService:
@@ -24,25 +24,30 @@ class EmbeddingService:
         self.embed_model = os.getenv('TEI_EMBEDDING_MODEL')
         self.timeout = timeout
 
-    def embed_text(self, 
+    async def embed_text(self, 
                    text: str) -> Union[List[float],None]:
-        embedded_texts = self.embed_texts([text])
+        embedded_texts = await self.embed_texts([text])
         
         return embedded_texts if embedded_texts else None
 
-    def embed_texts(self, 
+    async def embed_texts(self, 
                     texts: List[str]) -> List[float]:
-        response = requests.post(
-            url=f"{self.base_url}/v1/embeddings",
-            json={"input": texts, "model": self.embed_model},
-            timeout=self.timeout,
-        )
-        try:
-            response.raise_for_status()
-        except requests.exceptions.HTTPError as http_err:
-            print(f"HTTP error occurred: {http_err}")
-            print(f"Status Code: {http_err.response.status_code}")
-            raise
 
-        data = response.json()["data"]
-        return [item["embedding"] for item in data][0]
+        try:    
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url=f"{self.base_url}/v1/embeddings",
+                    json={"input": texts, "model": self.embed_model},
+                    timeout=self.timeout,
+                )
+            response.raise_for_status()
+
+            data = response.json()["data"]
+            return [item["embedding"] for item in data][0]
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            raise
+            
+
+        

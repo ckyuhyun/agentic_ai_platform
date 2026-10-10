@@ -40,13 +40,19 @@ class SqlModelRetriever(BaseRetriever):
 
     def _retrieve(self, 
                   query_bundle) -> List[NodeWithScore]:
-        """
-        Custom Retriever
-        """
         # 1. Automatic Query Vectorization via LlamaIndex Config
         query_vector = Settings.embed_model.get_query_embedding(query_bundle.query_str)
-        embedding_arr = np.array(query_vector)
+        return self._search(query_vector)
 
+    async def _aretrieve(self, query_bundle) -> List[NodeWithScore]:
+        query_vector = await Settings.embed_model.aget_query_embedding(query_bundle.query_str)
+
+        return self._search(query_vector)
+    
+
+    def _search(self, query_vector):
+        embedding_arr = np.array(query_vector)
+        
         # 2. Dynamic Cosine Distance Formula using reflection
         similarity_expr = (1.0 - self.vector_field.cosine_distance(embedding_arr)).label("similarity_score")
 
@@ -92,6 +98,7 @@ class SqlModelRetriever(BaseRetriever):
                 nodes.append(NodeWithScore(node=node, score=score))
 
         return nodes
+
 
                  
 

@@ -17,11 +17,17 @@ class LLamaIndexEmbeddings(BaseEmbedding):
         self._emb_instance = bases()
 
     def _get_query_embedding(self, query: str) -> list[float]:
-        return self._emb_instance.embed_text(query)
-
+        #return self._emb_instance.embed_text(query)
+        return asyncio.run(self._emb_instance.embed_text(query))
+    
     def _get_text_embedding(self, text: str) -> list[float]:
-        return self._emb_instance.embed_text(text)
+            return asyncio.run(self._emb_instance.embed_text(text))
 
     async def _aget_query_embedding(self, query: str) -> list[float]:
         # EmbeddingService is sync, so run the request off the event loop.
-        return await asyncio.to_thread(self._emb_instance.embed_text, query)
+        return await self._emb_instance.embed_text(query)
+
+    async def _aget_text_embedding(self, text: str) -> list[float]:
+            # EmbeddingService is sync, so run the request off the event loop.
+        return await self._emb_instance.embed_text(text)
+
