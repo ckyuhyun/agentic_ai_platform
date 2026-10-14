@@ -90,16 +90,25 @@ class PromptRegistry:
             
         else:
             self.register_func = self.__register_to_local__
-            
-        system_prompt : str = next( (m for m in promptTempate.messages if isinstance(m, SystemMessagePromptTemplate)), 
-                             None
-                            ).prompt.template
-            
-        self.register_func(prompt_type=prompt_type,
-                                version_id=version_id,
-                                prompt=system_prompt,
-                                description=description,
-                                tag=tag)
+
+        prompt = None
+        if self.is_register_to_langsmith:
+            pass
+        else:
+            prompt = self.__get_prompt_by_type_version_tags__(prompt_type=prompt_type,
+                                                     version_id=version_id,
+                                                     tag=tag)
+
+        if prompt is None:
+            system_prompt : str = next( (m for m in promptTempate.messages if isinstance(m, SystemMessagePromptTemplate)), 
+                                None
+                                ).prompt.template
+                
+            self.register_func(prompt_type=prompt_type,
+                                    version_id=version_id,
+                                    prompt=system_prompt,
+                                    description=description,
+                                    tag=tag)
         
 
     def register_with_str_prompt(self,
@@ -115,12 +124,21 @@ class PromptRegistry:
             self.register_func = self.__register_to_langsmith__
         else:
             self.register_func = self.__register_to_local__
-            
-        self.register_func(prompt_type=prompt_type,
-                            version_id=version_id,
-                            prompt=prompt,
-                            description=description,
-                            tag=tag)
+
+        exist_prompt = None
+        if self.is_register_to_langsmith:
+            pass
+        else:
+            exist_prompt = self.__get_prompt_by_type_version_tags__(prompt_type=prompt_type,
+                                                    version_id=version_id,
+                                                    tag=tag)            
+
+        if exist_prompt is None:    
+            self.register_func(prompt_type=prompt_type,
+                                version_id=version_id,
+                                prompt=prompt,
+                                description=description,
+                                tag=tag)
 
     def get_prompt(self,
                    prompt_type: PromptType,
@@ -132,11 +150,13 @@ class PromptRegistry:
             self.getprompt_func = self.__get_prompt_by_type_version_tags__
 
         try:
-            return self.getprompt_func(prompt_type, 
+            system_prompt =  self.getprompt_func(prompt_type, 
                                     version_id,
                                     tag)
+            return system_prompt
         except Exception as e: 
             logger.error(f"Error on get_prompt : {e}")
+
 
 
     def __register_to_langsmith__(self, 
@@ -200,7 +220,7 @@ class PromptRegistry:
     def __get_prompt_by_type_version_tags__(self,
                     prompt_type: PromptType,
                     version_id: str | None = "",
-                    tag: str | None = "") -> SystemPromptVersion:
+                    tag: str | None = "") -> SystemPromptVersion | None:
 
         prompt_type_value = self.prompts_storage.get(prompt_type, {})
         
@@ -208,24 +228,24 @@ class PromptRegistry:
         if version_id is not None:
             prompt_version_value = [d for d in prompt_type_value if d.version_id == version_id]
             if len(prompt_version_value) == 0:
-                raise ValueError(f"No prompt found for type {prompt_type} with version {version_id}")
+                return None
             
             if len(prompt_version_value) > 1:
                 prompt_version_value = [d for d in prompt_version_value if tag == d.tag ]
 
                 if len(prompt_version_value) == 0:
-                    raise ValueError(f"No prompt found for type {prompt_type} with version :{version_id} and tag :{tag}")
+                    return None
 
                 if len(prompt_version_value) > 1:
                     raise ValueError(f"Multiple prompts found for type {prompt_type} with version {version_id}")
         else:
-            pass
+            return None
 
         # if tags is not None:
         #     for t in tags:
         #         prompts = [p for p in prompts if t in p.tags]
-
-        return prompt_version_value[0]
+        logger.warning(f"prompt_version_value : {len(prompt_version_value)}")
+        return  prompt_version_value[0] if len(prompt_version_value) ==1 else None
     
  
     def update(self,

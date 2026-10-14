@@ -31,10 +31,10 @@ class PostgresController:
         self.__content_field_name__:str
         self.__vector_field_name__:str
 
-        self.embeddings = EmbeddingService()
-        self.response_llm = LlamaIndexLLM(model_name=os.getenv("LLM_Model_Key"))
+        self.__embeddings__ = EmbeddingService()
+        self.__response_llm__ = LlamaIndexLLM(model_name=os.getenv("LLM_Model_Key"))
         
-        self.Base = declarative_base()
+        self.__Base_ = declarative_base()
         self._session_factory = sessionmaker(bind=Postgres_Engine)
         
          
@@ -44,6 +44,15 @@ class PostgresController:
                    stmt:Any):
         with self.__session_create__() as session, session.begin():
                 session.execute(stmt)
+
+    async def fetch(self,
+                    stmt:Any) -> Any:
+        try:
+            with self.__session_create__() as session, session.begin():
+                result = session.execute(stmt)
+                return result.mappings().all()
+        except Exception as e:
+            raise f"{e}"
     
     async def search_query(self,
                            query:str):
@@ -54,7 +63,7 @@ class PostgresController:
         
         query_engine = RetrieverQueryEngine.from_args(
                     retriever=sm,
-                    llm=self.response_llm,
+                    llm=self.__response_llm__,
                     #node_postprocessors=[CohereRerank(top_n=3)]
                 )
         

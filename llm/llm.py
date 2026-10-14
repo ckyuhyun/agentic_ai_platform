@@ -125,7 +125,7 @@ class LLM:
             # window, not the hosted model's default.
             self.TOKEN_LIMIT = self._fetch_vllm_max_model_len(fallback_model, self.TOKEN_LIMIT)
             self.MAX_OUTPUT_TOKENS = max(256, self.TOKEN_LIMIT // 4)
-            self._llm_mode = self._build_vllm_model(fallback_model)            
+            self._llm_model_instance = self._build_vllm_model(fallback_model)            
             
         except Exception as e:
             logger.warning("LLM: failed to switch %s to vLLM fallback %s: %s",
@@ -204,7 +204,9 @@ class LLM:
         return self._fetch_vllm_max_model_len(self._get_llm_model_name(), default)
 
 
-    def _fetch_vllm_max_model_len(self, llm_model: str, default: int) -> int:
+    def _fetch_vllm_max_model_len(self, 
+                                  llm_model: str, 
+                                  default: int) -> int:
         try:
             resp = httpx.get(f"{self._get_current_llm_url()}/models", headers=self._vllm_headers, timeout=5)
             resp.raise_for_status()
@@ -260,12 +262,31 @@ class LLM:
         return response
 
        
+    async def invoke_with_prompt_template(self, 
+                                          prompt:ChatPromptTemplate):
+        return await self._llm_invoke(
+            lambda : self._llm_model_instance.ainvoke(prompt))
+        
+    async def invoke_with_structured_llm(self, 
+                                         schema:Any,
+                                         prompt:ChatPromptTemplate):
+        # Built inside the lambda so a fallback swap re-wraps the new llm_instance.
+        system_prompt, human_prompt = self._decode_human_system_prompt_from_chatTemplate(prompt)
+        prompt_token = await self.get_prompt_token_count(system_prompt) + await self.get_prompt_token_count(human_prompt)
+
+        logger.info(f"Used Token : {prompt_token}")
+
+        response = await self._llm_invoke(
+            lambda: self._llm_model_instance.with_structured_output(schema=schema).ainvoke(prompt))
+
+        return response
 
     async def _single_invoke(self,
                        system_human_message:str,
                        config : dict = None) -> str:
         # A lambda, not the ainvoke() coroutine itself: llm_instance is swapped
         # on fallback, so the retry has to re-read it and build a fresh call.
+        
         return await self._llm_invoke(lambda: self._llm_model_instance.ainvoke(system_human_message,
                                                                         config=config))
 
@@ -336,24 +357,6 @@ class LLM:
         result = await self._llm_model_instance.abatch(prompts, config={"max_concurrency": 4})
         return result
 
-    async def invoke_with_prompt_template(self, 
-                                          prompt:ChatPromptTemplate):
-        return await self._llm_invoke(
-            lambda : self._llm_model_instance.ainvoke(prompt))
-        
-    async def invoke_with_structured_llm(self, 
-                                         schema:Any,
-                                         prompt:ChatPromptTemplate):
-        # Built inside the lambda so a fallback swap re-wraps the new llm_instance.
-        system_prompt, human_prompt = self._decode_human_system_prompt_from_chatTemplate(prompt)
-        prompt_token = await self.get_prompt_token_count(system_prompt) + await self.get_prompt_token_count(human_prompt)
-
-        logger.info(f"Used Token : {prompt_token}")
-
-        response = await self._llm_invoke(
-            lambda: self._llm_model_instance.with_structured_output(schema=schema).ainvoke(prompt))
-
-        return response
         
 
             
@@ -497,6 +500,7 @@ class LLM:
         return ChatOpenAI(
             model=llm_model_name,
             base_url=self._get_current_llm_url(),
+            streaming=True,
             api_key=self.VLLM_API_KEY,
             max_tokens=self.MAX_OUTPUT_TOKENS, # Must leave room for the prompt within TOKEN_LIMIT -- never set this to the full context size
             temperature=self.temperature,

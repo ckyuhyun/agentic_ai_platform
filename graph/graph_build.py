@@ -53,7 +53,7 @@ class GraphBuild:
         else:
             self.app = graph.compile()
 
-        target_timetravel = None
+        target_checkpointer_timetravel = None
         if checkpointer_timetravel_enabled:
             logger.info("Checkpointer timetravel is enabled. Using InMemorySaver for checkpointer.")
 
@@ -67,16 +67,16 @@ class GraphBuild:
 
             checkpointer_timetravel_target_index = input("Enter the target node for timetravel (or leave blank to skip): ").strip()
             if checkpointer_timetravel_target_index:
-                target_timetravel = snaps[int(checkpointer_timetravel_target_index)]
+                target_checkpointer_timetravel = snaps[int(checkpointer_timetravel_target_index)]
             else:
                 logger.info("No timetravel target selected. Proceeding with normal execution.")
 
         try:
-            if target_timetravel is not None:
+            if target_checkpointer_timetravel is not None:
                 # Input must be None to continue from the checkpoint: any non-None
                 # input discards the checkpoint's pending tasks and re-enters from START.
                 async for chunk in self.app.astream(None,
-                                            config=target_timetravel.config,
+                                            config=target_checkpointer_timetravel.config,
                                             stream_mode="updates",
                                             version="v2"):
                     self._handle_chunk(chunk)
