@@ -9,7 +9,7 @@ class ToolState(BaseModel):
     tool_result : Annotated[Any, Field(description="Result returned by the tool", default="")]
     status : Annotated[Literal["success", "failed"],Field(default="failed", description="Outcome of this tool call attempt") ]
     attempt : Annotated[int, Field(default=0, description="1-indexed attempt number for this tool_name")]
-    error: Annotated[Optional[str], Field(default=None,  description="Error message if status is 'failed'")]
+    error: Annotated[str|None, Field(default=None,  description="Error message if status is 'failed'")]
 
 
 

@@ -9,7 +9,7 @@ from track_issue_system import prompt_hub
 from agentic_ai_platform import logger
 from agentic_ai_platform.data_class.tool_spec import ToolSpec
 from agentic_ai_platform.llm.llm import LLM
-from agentic_ai_platform.states.filter_message_state import FilterMessageItem, FilterMessageItemLLM
+from agentic_ai_platform.states.filter_message_state import FilterMessageItem, FilterMessageBatchStateLLM
 from agentic_ai_platform.graph.node_trace import NodeTrace
 
 
@@ -111,7 +111,7 @@ def filter_out_invalid_messages(messages: List[str]) -> List[dict]:
     
     return filtered_messages
 
-async def classify_messages(node_llm,
+async def classify_messages(node_llm:LLM,
                        prompt_template: ChatPromptTemplate,
                        message_texts: List[str],
                        batch_size: int,
@@ -129,32 +129,35 @@ async def classify_messages(node_llm,
         pre_filtered_messages = filter_out_invalid_messages(set(message_texts))
         #chunks = [pre_filtered_messages[i:i + batch_size] for i in range(0, len(pre_filtered_messages), batch_size)]
 
-        structured_llm = node_llm.llm_instance.with_structured_output(FilterMessageItemLLM)
 
         results: List[FilterMessageItem] = []
-        prompts = [
-            prompt_template.format_messages(input=f'{chunk_index} : {chunk}')
-            for chunk_index, chunk in enumerate(pre_filtered_messages)
-        ]
+        message_streamline = "\n".join(f'{i+1} : {chunk}' for i, chunk in enumerate(pre_filtered_messages))
+        prompt = prompt_template.format_messages(input=message_streamline)
+        
 
         try:
-            response = await structured_llm.abatch(prompts, config={"max_concurrency": max_concurrency})
+            response = await node_llm.invoke_with_structured_llm(schema=FilterMessageBatchStateLLM,
+                                                                prompt=prompt)
         except Exception as e:
             # A single chunk failing (e.g. the model's completion got cut off
             # before it could finish the JSON) shouldn't discard results
             # already collected from other chunks.
             logger.error(f'classify_messages error => {e}')
-            response = []
+            response = FilterMessageBatchStateLLM()
 
 
-        for index, batch_result in enumerate(response):
-                # index from llm seems starting with 
-                message_index = index
+        for batch_result in response.items:
+                # Map by the index the LLM echoes back, not by position: the model
+                # may skip or reorder messages, which would shift every later score.
+                message_index = batch_result.index
+                if not 0 < message_index <= len(pre_filtered_messages):
+                    logger.warning(f'classify_messages: LLM returned out-of-range index {message_index}; skipping')
+                    continue
                 results.append(FilterMessageItem(
                     index=message_index,
-                    scoring=batch_result. scoring,
+                    scoring=batch_result.scoring,
                     reasoning=batch_result.reasoning,
-                    cleaned_message=pre_filtered_messages[message_index],
+                    cleaned_message=pre_filtered_messages[message_index-1],
                 ))
 
         scoring_threadhold = float(os.getenv("Score_Threadhold","0.5"))
@@ -222,15 +225,17 @@ def create_message_filter_agent(node_llm : LLM,
                                         iteration=state_model.iteration, 
                                         model=node_llm.model_name)
 
-        messages = state.messages[-1]
-        if isinstance(messages, ToolMessage):
-            messages = messages.content
+        # messages = state.messages[-1]
+        # if isinstance(messages, ToolMessage):
+        #     messages = messages.content
 
 
         # first pre filtering only with length of string for each message
 
-        _message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
-        message_texts = pre_filtering(_message_texts)
+        #_message_texts = [m.get("text", "") if isinstance(m, dict) else str(m) for m in messages]
+        raw_message = state_model.raw_slack_messages
+        if isinstance(raw_message, list) and raw_message and isinstance(raw_message[0], str):
+            message_texts = pre_filtering(raw_message)
 
         if not message_texts:
             logger.info("[message_filter_agent] => No meessages passed")
@@ -244,12 +249,12 @@ def create_message_filter_agent(node_llm : LLM,
         # tool_prompt_template = next(t.prompt_template for t in tools if t.name == "vector_as_judge")
 
         #messages_not_in_db = [message for message in message_texts if not await _found_similar_message_in_db(message)]
-        messages_in_db, messages_not_in_db = await _found_similar_message_in_db(message_texts)
+        #messages_in_db, messages_not_in_db = await _found_similar_message_in_db(message_texts)
 
 
         all_items = await classify_messages(node_llm,
                                         prompt_template,
-                                        messages_not_in_db,
+                                        message_texts,
                                         batch_size=batch_size,
                                         max_concurrency=max_concurrency)
 
