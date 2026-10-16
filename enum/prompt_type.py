@@ -18,6 +18,10 @@ class PromptType(str, Enum):
     #HUMAN_REVIEW = "human_review"
     QUERY_Rewrite = "query_clarifier"
 
+    #Tools
+    Slack_Message_Fetch = "Slack_Message_Fetch"
+    RAG_Data_Fetch = "RAG_Fetch"
+
     
 
 

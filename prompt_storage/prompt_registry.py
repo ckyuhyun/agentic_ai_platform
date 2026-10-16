@@ -244,7 +244,7 @@ class PromptRegistry:
         # if tags is not None:
         #     for t in tags:
         #         prompts = [p for p in prompts if t in p.tags]
-        logger.warning(f"prompt_version_value : {len(prompt_version_value)}")
+        
         return  prompt_version_value[0] if len(prompt_version_value) ==1 else None
     
  

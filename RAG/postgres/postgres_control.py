@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Any, overload
 
@@ -35,27 +36,29 @@ class PostgresController:
         self.__response_llm__ = LlamaIndexLLM(model_name=os.getenv("LLM_Model_Key"))
         
         self.__Base_ = declarative_base()
-        self._session_factory = sessionmaker(bind=Postgres_Engine)
+        self._session_factory = self.__session_create__()
         
          
-
+    
     
     async def push(self, 
                    stmt:Any):
-        with self.__session_create__() as session, session.begin():
-                session.execute(stmt)
+        await asyncio.to_thread(self.__push__, stmt=stmt)
+
+  
 
     async def fetch(self,
                     stmt:Any) -> Any:
-        try:
-            with self.__session_create__() as session, session.begin():
-                result = session.execute(stmt)
-                return result.mappings().all()
-        except Exception as e:
-            raise f"{e}"
+        return await asyncio.to_thread(self.__fetch__, stmt)
+
+
     
     async def search_query(self,
                            query:str):
+
+        if not self.__model__:
+            raise 'The llm model for postgres was not set from inherited child class '
+        
         sm = SqlModelRetriever(session_factory=self.__session_create__,
                                 target_model=self.__model__,
                                 content_field_name=self.__content_field_name__,
@@ -73,6 +76,9 @@ class PostgresController:
     def init_table(self):
         if not self.__table_name__:
             raise ValueError("table name is not set")
+
+        if not self.__model__:
+            raise 'The llm model for postgres was not set from inherited child class '
             
         inspector = inspect(Postgres_Engine)
     
@@ -80,9 +86,29 @@ class PostgresController:
             # Create all tables in the engine
             self.__model__.metadata.create_all(Postgres_Engine)
 
+    def __fetch__(self, 
+                  stmt:Any) -> Any:
+        try:
+            with self.__session_create__(expire_on_commit=False) as session:
+                self._session_factory
+                result = session.execute(stmt)
+                return result.mappings().all()
+        except:
+            raise            
+
+    def __push__(self, 
+                 stmt:Any):
+        with self.__session_create__() as session, session.begin():
+                        session.execute(stmt)            
+
     
-    def __session_create__(self):
+    def __session_create__(self, 
+                           expire_on_commit=True):
+        self._session_factory = sessionmaker(bind=Postgres_Engine, 
+                     expire_on_commit=expire_on_commit)
         return self._session_factory()
+
+    
 
          
         
